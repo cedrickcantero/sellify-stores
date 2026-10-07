@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db } from "./db";
-import { shop } from "./schema";
+import { organization, shop } from "./schema";
 
 // The only unscoped shop lookup: store resolution and slug uniqueness.
 export async function resolveShopBySlug(slug: string): Promise<{ shopId: string } | null> {
@@ -26,6 +26,12 @@ export async function insertShop(input: {
     })
     .returning({ shopId: shop.id });
   return row;
+}
+
+// Rolls back a half-finished sign-up. Deleting the organization also deletes
+// its members, invitations and shop row through foreign key cascades.
+export async function deleteOrganization(organizationId: string): Promise<void> {
+  await db.delete(organization).where(eq(organization.id, organizationId));
 }
 
 export function isUniqueViolation(error: unknown): boolean {

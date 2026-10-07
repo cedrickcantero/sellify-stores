@@ -1,8 +1,15 @@
 import "server-only";
 import { isAPIError } from "better-auth/api";
 import { z } from "zod";
+import { clearSessionCookies } from "@/auth/cookies";
 import { auth } from "@/auth/server";
-import { insertShop, isUniqueViolation, resolveShopBySlug, setSessionActiveOrganization } from "@/data";
+import {
+  deleteOrganization,
+  insertShop,
+  isUniqueViolation,
+  resolveShopBySlug,
+  setSessionActiveOrganization,
+} from "@/data";
 import { err, ok, type Result } from "@/domain/result";
 import { slugCandidates, slugify } from "@/domain/slug";
 
@@ -15,7 +22,10 @@ export const registerShopOwnerInput = z.object({
 
 export type RegisterShopOwnerInput = z.input<typeof registerShopOwnerInput>;
 
-export type RegisterShopOwnerError = "invalid" | "email_taken";
+// invalid: input failed validation. email_taken: the email already has an
+// account. signup_failed: anything else went wrong; nothing is left behind,
+// so the owner can simply try again.
+export type RegisterShopOwnerError = "invalid" | "email_taken" | "signup_failed";
 
 export type RegisteredShopOwner = { userId: string; shopId: string; slug: string };
 
@@ -24,7 +34,9 @@ const MAX_SLUG_ATTEMPTS = 20;
 // Sign-up: creates the user (and their session cookie when called from a
 // server action), an organization for the shop with the user as owner, and
 // the shop row whose id is the organization id. The new session is pointed
-// at the shop so the owner lands in their backend straight away.
+// at the shop so the owner lands in their backend straight away. If any step
+// after creating the user fails, the user, organization and session cookie
+// are removed again so the email is free to sign up once more.
 export async function registerShopOwner(
   input: RegisterShopOwnerInput,
 ): Promise<Result<RegisteredShopOwner, RegisterShopOwnerError>> {
@@ -41,12 +53,26 @@ export async function registerShopOwner(
     }
     throw error;
   }
-  if (!signUp.token) return err("email_taken");
   const userId = signUp.user.id;
 
-  const { shopId, slug } = await createShopForOwner(userId, shopName);
-  await setSessionActiveOrganization(signUp.token, shopId);
-  return ok({ userId, shopId, slug });
+  try {
+    // Better Auth returns no token when it did not sign the new user in.
+    if (!signUp.token) throw new Error("Sign-up returned no session token");
+    const { shopId, slug } = await createShopForOwner(userId, shopName);
+    await setSessionActiveOrganization(signUp.token, shopId);
+    return ok({ userId, shopId, slug });
+  } catch (error) {
+    console.error("registerShopOwner: rolling back sign-up", error);
+    await rollBackUser(userId);
+    return err("signup_failed");
+  }
+}
+
+async function rollBackUser(userId: string): Promise<void> {
+  const ctx = await auth.$context;
+  // Removes the user's sessions, accounts and memberships as well.
+  await ctx.internalAdapter.deleteUser(userId);
+  await clearSessionCookies();
 }
 
 async function createShopForOwner(
@@ -57,18 +83,27 @@ async function createShopForOwner(
   for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt++) {
     const slug = candidates.next().value;
     if (await resolveShopBySlug(slug)) continue;
+
+    let organizationId: string;
     try {
       // Called without request headers, so Better Auth treats it as a server
       // action on behalf of userId and makes them the owner.
       const organization = await auth.api.createOrganization({
         body: { name: shopName, slug, userId },
       });
-      return await insertShop({ organizationId: organization.id, slug, name: shopName }).then(
-        ({ shopId }) => ({ shopId, slug }),
-      );
+      organizationId = organization.id;
     } catch (error) {
       // Another sign-up took this slug between the check and the insert.
-      if (isUniqueViolation(error) || isOrganizationSlugTaken(error)) continue;
+      if (isOrganizationSlugTaken(error) || isUniqueViolation(error)) continue;
+      throw error;
+    }
+
+    try {
+      const { shopId } = await insertShop({ organizationId, slug, name: shopName });
+      return { shopId, slug };
+    } catch (error) {
+      await deleteOrganization(organizationId);
+      if (isUniqueViolation(error)) continue;
       throw error;
     }
   }

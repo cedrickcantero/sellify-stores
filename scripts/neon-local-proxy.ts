@@ -11,7 +11,9 @@ import { WebSocketServer } from "ws";
 const port = Number(process.env.NEON_LOCAL_WS_PROXY_PORT ?? 5488);
 const allowedHosts = new Set(["localhost", "127.0.0.1", "::1"]);
 
-const server = new WebSocketServer({ port });
+// Bound to the loopback interface only, so nothing else on the network can
+// use it to reach the local database.
+const server = new WebSocketServer({ host: "127.0.0.1", port });
 
 server.on("connection", (socket, request) => {
   const address = new URL(request.url ?? "/", "http://proxy").searchParams.get("address") ?? "";
@@ -31,4 +33,4 @@ server.on("connection", (socket, request) => {
   socket.on("close", () => tcp.end());
 });
 
-console.log(`Neon local WebSocket proxy listening on ws://localhost:${port}/v1`);
+console.log(`Neon local WebSocket proxy listening on ws://127.0.0.1:${port}/v1`);

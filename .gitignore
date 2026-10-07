@@ -45,3 +45,6 @@ next-env.d.ts
 /playwright-report/
 /test-results/
 /blob-report/
+
+# Generated and re-added by `next dev`; not part of the project.
+AGENTS.md

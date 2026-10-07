@@ -15,6 +15,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/db-migrate.ts",
     "db:seed": "tsx scripts/db-seed.ts",
+    "db:mark-test-database": "tsx scripts/db-mark-test-database.ts",
     "db:local-proxy": "tsx scripts/neon-local-proxy.ts"
   },
   "dependencies": {

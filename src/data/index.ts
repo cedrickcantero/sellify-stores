@@ -2,9 +2,13 @@ import "server-only";
 import { shopRepo, type ShopRepo } from "./repos/shop";
 
 export type { Shop, ShopRepo } from "./repos/shop";
-export { resolveShopBySlug, insertShop, isUniqueViolation } from "./shops";
+export { deleteOrganization, insertShop, isUniqueViolation, resolveShopBySlug } from "./shops";
 export { deviceCatalog, type DeviceModel } from "./device-catalog";
-export { firstOrganizationIdForUser, setSessionActiveOrganization } from "./auth-sessions";
+export {
+  activeShopForMember,
+  firstOrganizationIdForUser,
+  setSessionActiveOrganization,
+} from "./auth-sessions";
 export { authDatabaseAdapter } from "./auth-adapter";
 
 // Repositories for one tenant. Every query a repository runs is filtered by

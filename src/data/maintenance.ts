@@ -59,10 +59,45 @@ const RESET_TABLES = [
   "user",
 ];
 
-export async function resetTenantData(url: string): Promise<void> {
+// A table that exists only in a database deliberately marked as a test
+// database. It is not part of the Drizzle schema, so migrations never create
+// it anywhere else. Nothing is ever truncated in a database without it.
+const TEST_MARKER_TABLE = "sellify_test_database_marker";
+const NOT_MARKED =
+  "Refusing to touch this database: it is not marked as a test database. Run `pnpm db:mark-test-database` once against your test branch.";
+
+export async function markTestDatabase(url: string): Promise<void> {
   await withDatabase(url, (db) =>
     db.execute(
-      sql.raw(`TRUNCATE TABLE ${RESET_TABLES.map((t) => `"${t}"`).join(", ")} RESTART IDENTITY CASCADE`),
+      sql.raw(
+        `CREATE TABLE IF NOT EXISTS "${TEST_MARKER_TABLE}" (marked_at timestamptz NOT NULL DEFAULT now()); ` +
+          `COMMENT ON TABLE "${TEST_MARKER_TABLE}" IS 'Integration tests may truncate this database.'`,
+      ),
+    ),
+  );
+}
+
+export async function assertTestDatabaseMarked(url: string): Promise<void> {
+  const rows = await withDatabase(url, (db) =>
+    db.execute<{ marked: boolean }>(
+      sql.raw(`SELECT to_regclass('public.${TEST_MARKER_TABLE}') IS NOT NULL AS marked`),
+    ),
+  );
+  if (!rows.rows[0]?.marked) throw new Error(NOT_MARKED);
+}
+
+export async function resetTenantData(url: string): Promise<void> {
+  const tables = RESET_TABLES.map((t) => `"${t}"`).join(", ");
+  // The marker check and the truncate run as one statement, so the check
+  // cannot be skipped or raced.
+  await withDatabase(url, (db) =>
+    db.execute(
+      sql.raw(`DO $$ BEGIN
+        IF to_regclass('public.${TEST_MARKER_TABLE}') IS NULL THEN
+          RAISE EXCEPTION '${NOT_MARKED.replace(/'/g, "''")}';
+        END IF;
+        TRUNCATE TABLE ${tables} RESTART IDENTITY CASCADE;
+      END $$`),
     ),
   );
 }

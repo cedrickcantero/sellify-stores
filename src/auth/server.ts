@@ -29,6 +29,8 @@ export const auth = betterAuth({
   plugins: [
     organization({
       allowUserToCreateOrganization: false,
+      // A shop owns all of its data; deleting it is not a self-service action.
+      disableOrganizationDeletion: true,
     }),
     // Must stay last so Set-Cookie headers reach Next.js server actions.
     nextCookies(),

@@ -24,13 +24,12 @@ export async function signUpAction(_prev: AuthFormState, form: FormData): Promis
   };
   const result = await registerShopOwner({ ...values, password: text(form, "password") });
   if (!result.ok) {
-    return {
-      values,
-      error:
-        result.error === "email_taken"
-          ? "That email already has an account. Log in instead."
-          : "Check your details. Passwords need at least 8 characters.",
-    };
+    const messages = {
+      email_taken: "That email already has an account. Log in instead.",
+      invalid: "Check your details. Passwords need at least 8 characters.",
+      signup_failed: "We could not create your shop. Try again.",
+    } as const;
+    return { values, error: messages[result.error] };
   }
   redirect("/dashboard");
 }
