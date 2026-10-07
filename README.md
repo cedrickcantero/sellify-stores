@@ -45,6 +45,10 @@ Each test file therefore opens two pooled connections once and reuses them,
 `seedTwoShops()` writes each shop in a single statement, and the files run
 one at a time against the shared test branch.
 
+The data module raises Node's per-address connect attempt timeout (happy
+eyeballs) from 250ms to 2s, because a TCP connect to a distant Neon region
+can take longer than 250ms and was failing intermittently with ETIMEDOUT.
+
 ## Environment variables
 
 | Variable | Purpose |

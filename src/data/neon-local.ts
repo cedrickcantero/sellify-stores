@@ -1,4 +1,5 @@
 import type { neonConfig as NeonConfig } from "@neondatabase/serverless";
+import net from "node:net";
 import ws from "ws";
 
 // Driver setup shared by the app client and the maintenance helpers.
@@ -7,10 +8,19 @@ import ws from "ws";
 // When a connection fails, undici reports only an empty TypeError, which
 // hides the cause; `ws` reports it (for example the HTTP status of a refused
 // upgrade). Neon recommends `ws` for Node.
+//
+// Node's happy-eyeballs connect gives each address only 250ms by default and
+// then gives up on it. From a machine far from the Neon region a TCP connect
+// can take longer than that, which surfaced as intermittent ETIMEDOUT
+// connection failures. 2s per attempt fixes it and changes nothing where
+// latency is low (Vercel). The call is process-wide and idempotent.
+const CONNECT_ATTEMPT_TIMEOUT_MS = 2000;
+
 export function configureNeon(
   config: typeof NeonConfig,
   env: Record<string, string | undefined> = process.env,
 ): void {
+  net.setDefaultAutoSelectFamilyAttemptTimeout(CONNECT_ATTEMPT_TIMEOUT_MS);
   config.webSocketConstructor = ws;
   configureNeonForLocalProxy(config, env);
 }

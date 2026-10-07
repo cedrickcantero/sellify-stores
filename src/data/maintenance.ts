@@ -104,6 +104,29 @@ export async function assertTestDatabaseMarked(url: string): Promise<void> {
   if (!rows.rows[0]?.marked) throw new Error(NOT_MARKED);
 }
 
+// Test seeding writes rows, so it checks the marker too; the result is
+// cached per URL so seeding stays one round trip per shop.
+const markedUrls = new Map<string, Promise<void>>();
+
+function assertMarkedOnce(url: string): Promise<void> {
+  let check = markedUrls.get(url);
+  if (!check) {
+    check = assertTestDatabaseMarked(url).catch((error: unknown) => {
+      markedUrls.delete(url);
+      throw error;
+    });
+    markedUrls.set(url, check);
+  }
+  return check;
+}
+
+// Closes the app's shared database client. For test teardown only; loaded
+// lazily so scripts that import this module never load the app client.
+export async function closeDb(): Promise<void> {
+  const { closeDb: close } = await import("./db");
+  await close();
+}
+
 // Test seeding: a user with an email and password login, an organization
 // with the user as owner, and its shop, written in one statement (one round
 // trip) instead of the dozen or so sequential queries the sign-up use case
@@ -118,6 +141,7 @@ export async function insertShopWithOwner(
     passwordHash: string;
   },
 ): Promise<{ shopId: string; userId: string }> {
+  await assertMarkedOnce(url);
   const userId = crypto.randomUUID();
   const accountId = crypto.randomUUID();
   const shopId = crypto.randomUUID();

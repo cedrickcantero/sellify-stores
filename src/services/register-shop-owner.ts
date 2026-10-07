@@ -73,13 +73,29 @@ export async function registerShopOwner(
 
 type CreatedOrganization = { organizationId?: string };
 
+// Every step is attempted even if an earlier one fails, so one failure never
+// leaves the rest behind. Each failure is logged; the first is rethrown
+// after all steps ran, because a partial rollback needs attention.
 async function rollBack(userId: string, created: CreatedOrganization): Promise<void> {
-  // Deleting the organization also deletes its shop and members.
-  if (created.organizationId) await deleteOrganization(created.organizationId);
-  const ctx = await auth.$context;
-  // Removes the user's sessions, accounts and memberships as well.
-  await ctx.internalAdapter.deleteUser(userId);
-  await clearSessionCookies();
+  const organizationId = created.organizationId;
+  const steps: Array<[string, () => Promise<unknown>]> = [
+    // Deleting the organization also deletes its shop and members.
+    ["delete organization", async () => organizationId && deleteOrganization(organizationId)],
+    // Removes the user's sessions, accounts and memberships as well.
+    ["delete user", async () => (await auth.$context).internalAdapter.deleteUser(userId)],
+    ["clear session cookies", () => clearSessionCookies()],
+  ];
+
+  let firstError: unknown;
+  for (const [name, step] of steps) {
+    try {
+      await step();
+    } catch (error) {
+      console.error(`registerShopOwner: rollback step "${name}" failed`, error);
+      firstError ??= error;
+    }
+  }
+  if (firstError !== undefined) throw firstError;
 }
 
 async function createShopForOwner(

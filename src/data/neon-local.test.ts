@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import net from "node:net";
 import ws from "ws";
 import { configureNeon, configureNeonForLocalProxy } from "./neon-local";
 
@@ -13,6 +14,12 @@ describe("configureNeon", () => {
     const config = freshConfig();
     configureNeon(config, {});
     expect(config.webSocketConstructor).toBe(ws);
+  });
+
+  it("gives each address family attempt 2s so slow TCP connects are not abandoned", () => {
+    net.setDefaultAutoSelectFamilyAttemptTimeout(250);
+    configureNeon(freshConfig(), {});
+    expect(net.getDefaultAutoSelectFamilyAttemptTimeout()).toBe(2000);
   });
 
   it("still applies the local proxy setting in development", () => {

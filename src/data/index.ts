@@ -10,7 +10,6 @@ export {
   setSessionActiveOrganization,
 } from "./auth-sessions";
 export { authDatabaseAdapter } from "./auth-adapter";
-export { closeDb } from "./db";
 
 // Repositories for one tenant. Every query a repository runs is filtered by
 // the shop id given here; later tickets add products, repairs, buybacks,

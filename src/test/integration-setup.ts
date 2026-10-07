@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach } from "vitest";
-import { closeDb, forShop } from "@/data";
-import { closeMaintenancePools, resetTenantData } from "@/data/maintenance";
+import { forShop } from "@/data";
+import { closeDb, closeMaintenancePools, resetTenantData } from "@/data/maintenance";
 import { databaseKey } from "./test-database-url";
 
 // Runs in every integration worker. The global setup has already checked
@@ -13,23 +13,26 @@ if (!url || !appUrl || databaseKey(appUrl) !== databaseKey(url)) {
   throw new Error("Refusing to run: integration workers must use TEST_DATABASE_URL.");
 }
 
-const WARM_UP_ATTEMPTS = 3;
+// Waits before the second and third warm-up attempts.
+const WARM_UP_BACKOFF_MS = [500, 1500];
 
 // Opens the two shared connections (test reset and app client) before the
 // first test. A free-tier Neon compute may be waking up, so a failed first
-// connection is retried here instead of failing whichever test runs first.
-// Later failures are real and are not retried.
+// connection is retried here, with a short backoff, instead of failing
+// whichever test runs first. Later failures are real and are not retried.
 beforeAll(async () => {
-  for (let attempt = 1; ; attempt++) {
+  for (let attempt = 0; ; attempt++) {
     try {
       await resetTenantData(url);
       await forShop("warm-up").shop.get();
       return;
     } catch (error) {
-      if (attempt >= WARM_UP_ATTEMPTS) throw error;
-      console.warn(`Test database warm-up failed (attempt ${attempt}), retrying.`, error);
+      const wait = WARM_UP_BACKOFF_MS[attempt];
+      if (wait === undefined) throw error;
+      console.warn(`Test database warm-up failed (attempt ${attempt + 1}), retrying.`, error);
       await closeMaintenancePools();
       await closeDb();
+      await new Promise((resolve) => setTimeout(resolve, wait));
     }
   }
 });

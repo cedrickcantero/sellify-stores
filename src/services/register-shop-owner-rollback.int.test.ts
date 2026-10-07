@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 // Simulates the shop insert failing after the user and organization were
 // created (for example a dropped connection), to prove sign-up rolls back.
-const failure = vi.hoisted(() => ({ insertShop: false, setActiveShop: false }));
+const failure = vi.hoisted(() => ({ insertShop: false, setActiveShop: false, deleteOrganization: false }));
 vi.mock("@/data", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/data")>();
   return {
@@ -10,6 +10,10 @@ vi.mock("@/data", async (importOriginal) => {
     insertShop: async (...args: Parameters<typeof actual.insertShop>) => {
       if (failure.insertShop) throw new Error("simulated shop insert failure");
       return actual.insertShop(...args);
+    },
+    deleteOrganization: async (...args: Parameters<typeof actual.deleteOrganization>) => {
+      if (failure.deleteOrganization) throw new Error("simulated organization delete failure");
+      return actual.deleteOrganization(...args);
     },
     setSessionActiveOrganization: async (
       ...args: Parameters<typeof actual.setSessionActiveOrganization>
@@ -68,5 +72,20 @@ describe("registerShopOwner when a step after creating the shop fails", () => {
 
     const retry = await registerShopOwner(input);
     expect(retry.ok && retry.value.slug).toBe("fixit-galway");
+  });
+});
+
+describe("registerShopOwner when a rollback step fails", () => {
+  it("still removes the user, then reports the rollback failure", async () => {
+    failure.setActiveShop = true;
+    failure.deleteOrganization = true;
+    const attempt = registerShopOwner(input);
+    await expect(attempt).rejects.toThrow("simulated organization delete failure");
+    failure.setActiveShop = false;
+    failure.deleteOrganization = false;
+
+    await expect(
+      auth.api.signInEmail({ body: { email: input.email, password: input.password } }),
+    ).rejects.toThrow();
   });
 });

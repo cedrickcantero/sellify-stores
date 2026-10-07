@@ -18,6 +18,8 @@ async function seedShop(
   ownerName: string,
   email: string,
 ): Promise<TestShop> {
+  // On purpose, no slug uniqueness logic (that lives in the sign-up use case):
+  // the tables are emptied before each test and the two seed names differ.
   const slug = slugify(name);
   const { shopId, userId } = await insertShopWithOwner(url, {
     shopName: name,
