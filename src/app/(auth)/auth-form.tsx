@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { Button, Field, Input } from "@/ui";
 import type { AuthFormState } from "./actions";
 
 export type AuthField = {
@@ -11,8 +12,7 @@ export type AuthField = {
   minLength?: number;
 };
 
-// Plain form for the sign-up and login pages. Styling is provisional; the
-// shared ui components from the design system ticket replace it.
+// The sign-up and login form, built from the shared ui components.
 export function AuthForm({
   action,
   fields,
@@ -27,31 +27,28 @@ export function AuthForm({
   return (
     <form action={formAction} className="flex flex-col gap-4">
       {fields.map((field) => (
-        <label key={field.name} className="flex flex-col gap-1 text-sm font-medium">
-          {field.label}
-          <input
+        <Field key={field.name} label={field.label}>
+          <Input
             name={field.name}
             type={field.type}
             autoComplete={field.autoComplete}
             minLength={field.minLength}
             defaultValue={state.values?.[field.name]}
             required
-            className="rounded-lg border border-neutral-300 px-3 py-2 font-normal"
           />
-        </label>
+        </Field>
       ))}
       {state.error ? (
-        <p role="alert" className="text-sm text-red-600">
+        <p
+          role="alert"
+          className="rounded-control border border-error bg-error-tint px-3 py-2 text-body text-error"
+        >
           {state.error}
         </p>
       ) : null}
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded-lg bg-purple-600 px-4 py-2 font-semibold text-white hover:bg-purple-700 disabled:opacity-60"
-      >
+      <Button type="submit" disabled={pending} className="w-full">
         {submitLabel}
-      </button>
+      </Button>
     </form>
   );
 }

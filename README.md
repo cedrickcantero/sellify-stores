@@ -71,9 +71,9 @@ On Vercel, set the same variables (except `TEST_DATABASE_URL` and
 | --- | --- |
 | `pnpm dev` | Start the dev server. |
 | `pnpm build` | Lint, then build for production. A lint error fails the build. |
-| `pnpm lint` | ESLint, including the rule that only `src/data` may import the database client. |
+| `pnpm lint` | ESLint, including the rule that only `src/data` may import the database client and the rule that rejects raw colour values in backend, auth and `src/ui` files. |
 | `pnpm typecheck` | Generate Next.js route types, then run `tsc`. |
-| `pnpm test:unit` | Vitest unit project: pure logic, no IO. |
+| `pnpm test:unit` | Vitest unit project: pure logic and ui component behaviour, no IO. Component tests (`*.test.tsx`) start with `// @vitest-environment jsdom`. |
 | `pnpm test:integration` | Vitest integration project against `TEST_DATABASE_URL`. Refuses to run unless it names a different database from `DATABASE_URL` and is marked as a test database (see above). Migrates the test database, seeds the device catalog and clears tenant data before every test. |
 | `pnpm test:e2e` | Playwright smoke tests. Set `PLAYWRIGHT_BASE_URL` to test a deployed URL (and `VERCEL_AUTOMATION_BYPASS_SECRET` for protected previews); otherwise a local dev server is started. Run `pnpm exec playwright install chromium` once first. |
 | `pnpm db:generate` | Generate a SQL migration in `drizzle/` from the schema in `src/data/schema`. |
@@ -90,7 +90,8 @@ On Vercel, set the same variables (except `TEST_DATABASE_URL` and
 | data | `src/data` | Database schema, the client and tenant-scoped repositories. `forShop(shopId)` is the way in; it is the only module allowed to import the database client. Other modules import only `@/data`; scripts and `src/test` may also import `@/data/maintenance`. |
 | services | `src/services` | Use cases (sign-up, `uploadImage(shopId, file)` which stores under `images/<shopId>/`). Take the shop id from the server, never from the browser. |
 | auth | `src/auth` | Better Auth setup and `getActiveShop()` for backend pages, which also checks the user is still a member of the shop. |
-| app | `src/app` | Routes. `(auth)` for sign-up and login, `(backend)` for the shop owner's backend. |
+| ui | `src/ui` | The Sellify platform design system: shadcn-style components on Radix primitives, restyled to the Sellify tokens in `src/app/globals.css`, plus the backend `AppShell`. Backend pages import only from `@/ui`. Rules: `CLAUDE.md`; guideline: `docs/brand/sellify.md`; gallery: `/dev/components` (dev server only). |
+| app | `src/app` | Routes. `(auth)` for sign-up and login, `(backend)` for the shop owner's backend (its layout renders the `AppShell`). |
 | test | `src/test`, `e2e` | Test helpers (`seedTwoShops`), integration setup and Playwright smoke tests. |
 
 A shop is a Better Auth organization; the shop id is the organization id, and

@@ -1,14 +1,24 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { signUpAction } from "../actions";
+import { AuthCard } from "../auth-card";
 import { AuthForm } from "../auth-form";
 
 export const metadata: Metadata = { title: "Create your shop | Sellify" };
 
 export default function SignUpPage() {
   return (
-    <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-6 px-4 py-12">
-      <h1 className="text-2xl font-bold">Create your shop</h1>
+    <AuthCard
+      title="Create your shop"
+      footer={
+        <>
+          Already have a shop?{" "}
+          <Link href="/login" className="font-semibold text-primary hover:text-primary-hover">
+            Log in
+          </Link>
+        </>
+      }
+    >
       <AuthForm
         action={signUpAction}
         submitLabel="Create shop"
@@ -25,12 +35,6 @@ export default function SignUpPage() {
           },
         ]}
       />
-      <p className="text-sm text-neutral-600">
-        Already have a shop?{" "}
-        <Link href="/login" className="font-medium text-purple-700 underline">
-          Log in
-        </Link>
-      </p>
-    </main>
+    </AuthCard>
   );
 }

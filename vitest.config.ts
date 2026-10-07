@@ -22,9 +22,11 @@ export default defineConfig({
         test: {
           name: "unit",
           environment: "node",
-          include: ["src/**/*.test.ts"],
+          // Component tests (*.test.tsx) opt into a DOM with a
+          // `// @vitest-environment jsdom` comment at the top of the file.
+          include: ["src/**/*.test.{ts,tsx}"],
           exclude: ["src/**/*.int.test.ts"],
-          setupFiles: ["src/test/unit-setup.ts"],
+          setupFiles: ["src/test/unit-setup.ts", "src/test/dom-setup.ts"],
         },
       },
       {
