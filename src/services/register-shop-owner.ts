@@ -54,21 +54,28 @@ export async function registerShopOwner(
     throw error;
   }
   const userId = signUp.user.id;
+  // The organization created so far, if any, so a failure at any later step
+  // can remove it too.
+  const created: CreatedOrganization = {};
 
   try {
     // Better Auth returns no token when it did not sign the new user in.
     if (!signUp.token) throw new Error("Sign-up returned no session token");
-    const { shopId, slug } = await createShopForOwner(userId, shopName);
+    const { shopId, slug } = await createShopForOwner(userId, shopName, created);
     await setSessionActiveOrganization(signUp.token, shopId);
     return ok({ userId, shopId, slug });
   } catch (error) {
     console.error("registerShopOwner: rolling back sign-up", error);
-    await rollBackUser(userId);
+    await rollBack(userId, created);
     return err("signup_failed");
   }
 }
 
-async function rollBackUser(userId: string): Promise<void> {
+type CreatedOrganization = { organizationId?: string };
+
+async function rollBack(userId: string, created: CreatedOrganization): Promise<void> {
+  // Deleting the organization also deletes its shop and members.
+  if (created.organizationId) await deleteOrganization(created.organizationId);
   const ctx = await auth.$context;
   // Removes the user's sessions, accounts and memberships as well.
   await ctx.internalAdapter.deleteUser(userId);
@@ -78,6 +85,7 @@ async function rollBackUser(userId: string): Promise<void> {
 async function createShopForOwner(
   userId: string,
   shopName: string,
+  created: CreatedOrganization,
 ): Promise<{ shopId: string; slug: string }> {
   const candidates = slugCandidates(slugify(shopName));
   for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt++) {
@@ -92,6 +100,7 @@ async function createShopForOwner(
         body: { name: shopName, slug, userId },
       });
       organizationId = organization.id;
+      created.organizationId = organizationId;
     } catch (error) {
       // Another sign-up took this slug between the check and the insert.
       if (isOrganizationSlugTaken(error) || isUniqueViolation(error)) continue;
@@ -102,9 +111,10 @@ async function createShopForOwner(
       const { shopId } = await insertShop({ organizationId, slug, name: shopName });
       return { shopId, slug };
     } catch (error) {
+      if (!isUniqueViolation(error)) throw error;
+      // Another shop took this slug: drop this organization, try the next.
       await deleteOrganization(organizationId);
-      if (isUniqueViolation(error)) continue;
-      throw error;
+      created.organizationId = undefined;
     }
   }
   throw new Error(`Could not find a free slug for shop "${shopName}"`);

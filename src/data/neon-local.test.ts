@@ -1,11 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { configureNeonForLocalProxy } from "./neon-local";
+import ws from "ws";
+import { configureNeon, configureNeonForLocalProxy } from "./neon-local";
 
 type Config = Parameters<typeof configureNeonForLocalProxy>[0];
 
 function freshConfig(): Config {
   return { useSecureWebSocket: true, pipelineTLS: true, pipelineConnect: "password" } as Config;
 }
+
+describe("configureNeon", () => {
+  it("uses the ws WebSocket client rather than Node's built-in one", () => {
+    const config = freshConfig();
+    configureNeon(config, {});
+    expect(config.webSocketConstructor).toBe(ws);
+  });
+
+  it("still applies the local proxy setting in development", () => {
+    const config = freshConfig();
+    configureNeon(config, { NODE_ENV: "development", NEON_LOCAL_WS_PROXY: "127.0.0.1:5488" });
+    expect(config.useSecureWebSocket).toBe(false);
+  });
+});
 
 describe("configureNeonForLocalProxy", () => {
   it("routes the driver through the local proxy in development", () => {

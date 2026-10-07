@@ -1,4 +1,6 @@
-import { registerShopOwner } from "@/services/register-shop-owner";
+import { hashPassword } from "better-auth/crypto";
+import { insertShopWithOwner } from "@/data/maintenance";
+import { slugify } from "@/domain/slug";
 
 export type TestShop = {
   shopId: string;
@@ -7,25 +9,39 @@ export type TestShop = {
   owner: { userId: string; name: string; email: string; password: string };
 };
 
-async function seedShop(name: string, ownerName: string, email: string): Promise<TestShop> {
-  const password = "test-password-123";
-  const result = await registerShopOwner({ name: ownerName, email, password, shopName: name });
-  if (!result.ok) {
-    throw new Error(`seedTwoShops: could not create ${name}: ${result.error}`);
-  }
-  return {
-    shopId: result.value.shopId,
-    slug: result.value.slug,
-    name,
-    owner: { userId: result.value.userId, name: ownerName, email, password },
-  };
+const PASSWORD = "test-password-123";
+
+async function seedShop(
+  url: string,
+  passwordHash: string,
+  name: string,
+  ownerName: string,
+  email: string,
+): Promise<TestShop> {
+  const slug = slugify(name);
+  const { shopId, userId } = await insertShopWithOwner(url, {
+    shopName: name,
+    slug,
+    ownerName,
+    email,
+    passwordHash,
+  });
+  return { shopId, slug, name, owner: { userId, name: ownerName, email, password: PASSWORD } };
 }
 
-// Two independent shops, each with its own owner, created through the real
-// sign-up use case. Integration tests use shop B to prove shop A's
-// repositories never see or change another shop's rows.
+// Two independent shops, each with an owner who can log in with
+// owner.email and owner.password. Rows are written directly (one statement
+// per shop, both at once) so every test can afford to seed; the sign-up use
+// case that normally creates them has its own integration tests. Integration
+// tests use shop B to prove shop A's repositories never see or change another
+// shop's rows.
 export async function seedTwoShops(): Promise<{ shopA: TestShop; shopB: TestShop }> {
-  const shopA = await seedShop("FixIt Galway", "Aoife Owner", "owner-a@example.com");
-  const shopB = await seedShop("Phone Clinic Cork", "Brian Owner", "owner-b@example.com");
+  const url = process.env.TEST_DATABASE_URL;
+  if (!url) throw new Error("seedTwoShops runs only in integration tests");
+  const passwordHash = await hashPassword(PASSWORD);
+  const [shopA, shopB] = await Promise.all([
+    seedShop(url, passwordHash, "FixIt Galway", "Aoife Owner", "owner-a@example.com"),
+    seedShop(url, passwordHash, "Phone Clinic Cork", "Brian Owner", "owner-b@example.com"),
+  ]);
   return { shopA, shopB };
 }

@@ -30,6 +30,30 @@ describe("tenant isolation", () => {
   });
 });
 
+describe("seedTwoShops", () => {
+  it("creates owners who can log in and land on their own shop", async () => {
+    const { shopA, shopB } = await seedTwoShops();
+
+    for (const seeded of [shopA, shopB]) {
+      const login = await auth.api.signInEmail({
+        body: { email: seeded.owner.email, password: seeded.owner.password },
+        asResponse: true,
+      });
+      const cookie = login.headers
+        .getSetCookie()
+        .map((c) => c.split(";")[0])
+        .join("; ");
+      const session = await auth.api.getSession({ headers: new Headers({ cookie }) });
+
+      expect(session?.user.id).toBe(seeded.owner.userId);
+      expect(session?.session.activeOrganizationId).toBe(seeded.shopId);
+      expect(await activeShopForMember(seeded.owner.userId, seeded.shopId)).toMatchObject({
+        slug: seeded.slug,
+      });
+    }
+  });
+});
+
 describe("activeShopForMember", () => {
   it("returns the shop for one of its members", async () => {
     const { shopA } = await seedTwoShops();

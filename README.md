@@ -39,6 +39,12 @@ checks stop them from ever touching a real database:
 Only the integration project loads `.env.local`; unit tests run with the
 database and Blob settings removed.
 
+Integration run time is dominated by network round trips to Neon (each
+query waits one round trip, and a full sign-up makes about 15 in sequence).
+Each test file therefore opens two pooled connections once and reuses them,
+`seedTwoShops()` writes each shop in a single statement, and the files run
+one at a time against the shared test branch.
+
 ## Environment variables
 
 | Variable | Purpose |

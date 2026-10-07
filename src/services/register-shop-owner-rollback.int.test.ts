@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 // Simulates the shop insert failing after the user and organization were
 // created (for example a dropped connection), to prove sign-up rolls back.
-const failure = vi.hoisted(() => ({ insertShop: false }));
+const failure = vi.hoisted(() => ({ insertShop: false, setActiveShop: false }));
 vi.mock("@/data", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/data")>();
   return {
@@ -11,8 +11,16 @@ vi.mock("@/data", async (importOriginal) => {
       if (failure.insertShop) throw new Error("simulated shop insert failure");
       return actual.insertShop(...args);
     },
+    setSessionActiveOrganization: async (
+      ...args: Parameters<typeof actual.setSessionActiveOrganization>
+    ) => {
+      if (failure.setActiveShop) throw new Error("simulated session update failure");
+      return actual.setSessionActiveOrganization(...args);
+    },
   };
 });
+
+const { resolveShopBySlug } = await import("@/data");
 
 const { auth } = await import("@/auth/server");
 const { registerShopOwner } = await import("./register-shop-owner");
@@ -45,6 +53,20 @@ describe("registerShopOwner when creating the shop fails", () => {
 
     expect(retry.ok).toBe(true);
     // The rolled-back organization no longer holds the slug.
+    expect(retry.ok && retry.value.slug).toBe("fixit-galway");
+  });
+});
+
+describe("registerShopOwner when a step after creating the shop fails", () => {
+  it("removes the shop and its organization as well as the user", async () => {
+    failure.setActiveShop = true;
+    const result = await registerShopOwner(input);
+    failure.setActiveShop = false;
+
+    expect(result).toEqual({ ok: false, error: "signup_failed" });
+    expect(await resolveShopBySlug("fixit-galway")).toBeNull();
+
+    const retry = await registerShopOwner(input);
     expect(retry.ok && retry.value.slug).toBe("fixit-galway");
   });
 });

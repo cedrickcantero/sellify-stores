@@ -1,16 +1,17 @@
 import "server-only";
 import { neonConfig, Pool } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-serverless";
-import { configureNeonForLocalProxy } from "./neon-local";
+import { configureNeon } from "./neon-local";
 import * as schema from "./schema";
 
 // The database client. Only files inside src/data may import this module;
 // an ESLint no-restricted-imports rule enforces it everywhere else.
 //
 // The WebSocket Pool (not the HTTP driver) is used because later use cases
-// (POS sales, order fulfilment) need interactive transactions.
+// (POS sales, order fulfilment) need interactive transactions. One pool is
+// shared per process, so connections are reused rather than re-established.
 
-configureNeonForLocalProxy(neonConfig);
+configureNeon(neonConfig);
 
 function createDb() {
   const connectionString = process.env.DATABASE_URL;
@@ -18,18 +19,26 @@ function createDb() {
     throw new Error("DATABASE_URL is not set");
   }
   const pool = new Pool({ connectionString });
-  return drizzle({ client: pool, schema, casing: "snake_case" });
+  return { pool, db: drizzle({ client: pool, schema, casing: "snake_case" }) };
 }
 
-export type Database = ReturnType<typeof createDb>;
+export type Database = ReturnType<typeof createDb>["db"];
 
-let instance: Database | undefined;
+let instance: ReturnType<typeof createDb> | undefined;
 
 // Created on first use so that importing the data module (for example during
 // `next build`) does not require a database connection string.
 export function getDb(): Database {
   instance ??= createDb();
-  return instance;
+  return instance.db;
+}
+
+// Closes the shared pool. Tests call it when a file finishes so no
+// connection is left open for the server to drop.
+export async function closeDb(): Promise<void> {
+  const current = instance;
+  instance = undefined;
+  await current?.pool.end();
 }
 
 export const db: Database = new Proxy({} as Database, {
