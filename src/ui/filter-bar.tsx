@@ -3,7 +3,7 @@
 import { Search } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ToggleGroup } from "radix-ui";
-import { useId, useTransition, type ReactNode } from "react";
+import { useId, useState, useTransition, type ReactNode } from "react";
 import { cn } from "./cn";
 import { Input } from "./input";
 import { pillVariants } from "./pill";
@@ -32,7 +32,7 @@ export function FilterBar({
   children,
 }: {
   filters: FilterDef[];
-  /** Optional free-text search, applied on Enter. */
+  /** Optional free-text search, applied on Enter or with the next pill change. */
   search?: { param: string; placeholder: string };
   /** Right-aligned actions such as the page's primary Button. */
   children?: ReactNode;
@@ -42,8 +42,25 @@ export function FilterBar({
   const params = useSearchParams();
   const [pending, startTransition] = useTransition();
 
+  // The search box is controlled so its text travels with a pill change.
+  // When the URL's search changes elsewhere (back button, a link), the box
+  // follows it.
+  const urlSearch = search ? (params.get(search.param) ?? "") : "";
+  const [searchText, setSearchText] = useState(urlSearch);
+  const [syncedSearch, setSyncedSearch] = useState(urlSearch);
+  if (urlSearch !== syncedSearch) {
+    setSyncedSearch(urlSearch);
+    setSearchText(urlSearch);
+  }
+
+  // Applies one change plus any search text typed but not yet submitted.
   function setParam(param: string, value: string | null) {
     const next = new URLSearchParams(params.toString());
+    if (search) {
+      const text = searchText.trim();
+      if (text) next.set(search.param, text);
+      else next.delete(search.param);
+    }
     if (value) next.set(param, value);
     else next.delete(param);
     if (next.toString() === params.toString()) return;
@@ -64,8 +81,7 @@ export function FilterBar({
           className="relative lg:w-64"
           onSubmit={(event) => {
             event.preventDefault();
-            const value = new FormData(event.currentTarget).get(search.param);
-            setParam(search.param, typeof value === "string" ? value.trim() || null : null);
+            setParam(search.param, searchText.trim() || null);
           }}
         >
           <Search
@@ -77,7 +93,8 @@ export function FilterBar({
             name={search.param}
             aria-label={search.placeholder}
             placeholder={search.placeholder}
-            defaultValue={params.get(search.param) ?? ""}
+            value={searchText}
+            onChange={(event) => setSearchText(event.target.value)}
             className="pl-9"
           />
         </form>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { Button, Field, Input } from "@/ui";
+import { Alert, Button, Field, Input } from "@/ui";
 import type { AuthFormState } from "./actions";
 
 export type AuthField = {
@@ -38,14 +38,7 @@ export function AuthForm({
           />
         </Field>
       ))}
-      {state.error ? (
-        <p
-          role="alert"
-          className="rounded-control border border-error bg-error-tint px-3 py-2 text-body text-error"
-        >
-          {state.error}
-        </p>
-      ) : null}
+      {state.error ? <Alert tone="error">{state.error}</Alert> : null}
       <Button type="submit" disabled={pending} className="w-full">
         {submitLabel}
       </Button>

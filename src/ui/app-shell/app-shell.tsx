@@ -20,11 +20,15 @@ export function AppShell({
 }) {
   return (
     <div className="flex min-h-dvh w-full">
-      <aside className="sticky top-0 hidden h-dvh w-sidebar shrink-0 flex-col gap-6 border-r border-border bg-surface px-4 py-5 lg:flex">
-        <div className="px-2">
-          <Logo />
+      {/* The aside stretches the full page height (background and border);
+          its content sticks to the top while the page scrolls. */}
+      <aside className="hidden w-sidebar shrink-0 border-r border-border bg-surface lg:block">
+        <div className="sticky top-0 flex max-h-dvh flex-col gap-6 overflow-y-auto px-4 py-5">
+          <div className="px-2">
+            <Logo />
+          </div>
+          <SidebarNav />
         </div>
-        <SidebarNav />
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-40 flex h-16 items-center gap-3 border-b border-border bg-surface px-4 sm:px-6 lg:px-8">

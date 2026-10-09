@@ -110,6 +110,30 @@ describe("FilterBar", () => {
     expect(navigation.replace).not.toHaveBeenCalled();
   });
 
+  it("applies search text typed but not yet submitted when a filter pill is chosen", async () => {
+    const user = userEvent.setup();
+    render(<FilterBar filters={filters} search={{ param: "q", placeholder: "Search products" }} />);
+
+    await user.type(screen.getByRole("searchbox", { name: "Search products" }), "pixel");
+    await user.click(screen.getByRole("radio", { name: "Phones" }));
+
+    expect(lastUrl()).toBe("/inventory?q=pixel&kind=phone");
+  });
+
+  it("shows the search from the URL after the URL changes elsewhere", () => {
+    // A fresh element each time, so React re-renders and reads the new URL.
+    const bar = () => (
+      <FilterBar filters={filters} search={{ param: "q", placeholder: "Search products" }} />
+    );
+    navigation.params = new URLSearchParams("q=pixel");
+    const { rerender } = render(bar());
+
+    navigation.params = new URLSearchParams("q=galaxy");
+    rerender(bar());
+
+    expect(screen.getByRole("searchbox", { name: "Search products" })).toHaveValue("galaxy");
+  });
+
   it("searches on Enter and clears the search when emptied", async () => {
     const user = userEvent.setup();
     const bar = <FilterBar filters={filters} search={{ param: "q", placeholder: "Search products" }} />;

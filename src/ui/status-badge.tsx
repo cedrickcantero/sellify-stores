@@ -36,12 +36,17 @@ const STATUSES = {
 
 export type Status = keyof typeof STATUSES;
 
+/** Every status, in display order. */
+export const STATUS_LIST = Object.keys(STATUSES) as Status[];
+
 const toneClasses: Record<StatusTone, { badge: string; dot: string }> = {
-  success: { badge: "bg-success-tint text-success", dot: "bg-success" },
-  warning: { badge: "bg-warning-tint text-warning", dot: "bg-warning" },
-  error: { badge: "bg-error-tint text-error", dot: "bg-error" },
+  // Text uses the darker *-text tokens (4.5:1 on the tint); dots keep the
+  // base status colour.
+  success: { badge: "bg-success-tint text-success-text", dot: "bg-success" },
+  warning: { badge: "bg-warning-tint text-warning-text", dot: "bg-warning" },
+  error: { badge: "bg-error-tint text-error-text", dot: "bg-error" },
   info: { badge: "bg-primary-tint text-primary", dot: "bg-primary" },
-  neutral: { badge: "bg-surface-muted text-muted-foreground", dot: "bg-muted-foreground" },
+  neutral: { badge: "bg-surface-muted text-secondary-foreground", dot: "bg-muted-foreground" },
 };
 
 /** The state of a record. Pass the record's status; the label and colour follow. */

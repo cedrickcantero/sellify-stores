@@ -25,34 +25,14 @@ import {
   TableHeader,
   TableRow,
   Textarea,
-  type Status,
+  Alert,
+  STATUS_LIST,
 } from "@/ui";
 
 export const metadata: Metadata = { title: "Components | Sellify" };
 
 // Dev-only gallery of every ui component and variant, for eyeballing
 // consistency. Not linked from the sidebar and not served in production.
-const STATUSES: Status[] = [
-  "completed",
-  "needs_refund",
-  "booked",
-  "in_progress",
-  "done",
-  "cancelled",
-  "quoted",
-  "accepted",
-  "received",
-  "sent",
-  "failed",
-  "pending",
-  "verified",
-  "error",
-  "online",
-  "offline",
-  "in_stock",
-  "sold_out",
-];
-
 // The gallery documents each token's code, so these strings are the one
 // place in the backend where hex values are allowed.
 /* eslint-disable no-restricted-syntax */
@@ -61,16 +41,24 @@ const SWATCHES = [
   { name: "primary-hover", code: "#7E22CE", className: "bg-primary-hover" },
   { name: "primary-tint", code: "#FAF5FF", className: "bg-primary-tint" },
   { name: "primary-border", code: "#D8B4FE", className: "bg-primary-border" },
+  { name: "primary-foreground", code: "#FFFFFF", className: "bg-primary-foreground" },
   { name: "foreground", code: "#171717", className: "bg-foreground" },
+  { name: "secondary-foreground", code: "#4B5563", className: "bg-secondary-foreground" },
   { name: "muted-foreground", code: "#6B7280", className: "bg-muted-foreground" },
   { name: "surface", code: "#FFFFFF", className: "bg-surface" },
   { name: "background", code: "#F9FAFB", className: "bg-background" },
   { name: "surface-muted", code: "#F3F4F6", className: "bg-surface-muted" },
   { name: "border", code: "#E5E7EB", className: "bg-border" },
-  { name: "input", code: "#D1D5DB", className: "bg-input" },
+  { name: "input", code: "#868C96", className: "bg-input" },
   { name: "success", code: "#16A34A", className: "bg-success" },
+  { name: "success-text", code: "#15803D", className: "bg-success-text" },
+  { name: "success-tint", code: "#F0FDF4", className: "bg-success-tint" },
   { name: "warning", code: "#D97706", className: "bg-warning" },
+  { name: "warning-text", code: "#B45309", className: "bg-warning-text" },
+  { name: "warning-tint", code: "#FFFBEB", className: "bg-warning-tint" },
   { name: "error", code: "#DC2626", className: "bg-error" },
+  { name: "error-text", code: "#B91C1C", className: "bg-error-text" },
+  { name: "error-tint", code: "#FEF2F2", className: "bg-error-tint" },
 ];
 /* eslint-enable no-restricted-syntax */
 
@@ -115,7 +103,7 @@ export default function ComponentGalleryPage() {
       />
 
       <Section title="Colour tokens">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
           {SWATCHES.map((swatch) => (
             <div key={swatch.name} className="flex flex-col gap-1.5">
               <div className={`h-12 rounded-control border border-border ${swatch.className}`} />
@@ -172,10 +160,17 @@ export default function ComponentGalleryPage() {
           <Pill tone="primary">Accessory</Pill>
         </Row>
         <Row>
-          {STATUSES.map((status) => (
+          {STATUS_LIST.map((status) => (
             <StatusBadge key={status} status={status} />
           ))}
         </Row>
+      </Section>
+
+      <Section title="Alert">
+        <Alert tone="error">Wrong email or password.</Alert>
+        <Alert tone="success">Store published.</Alert>
+        <Alert tone="warning">You have unpublished changes.</Alert>
+        <Alert tone="info">Your store is in preview.</Alert>
       </Section>
 
       <Section title="Form controls">

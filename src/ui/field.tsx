@@ -10,7 +10,7 @@ type ControlProps = {
 /**
  * Label, optional hint and field error around one control (Input, Textarea,
  * Select). Wires the label, `aria-invalid` and `aria-describedby` onto the
- * control, so pass the control without an id.
+ * control (adding to any description the control already has).
  */
 export function Field({
   label,
@@ -31,7 +31,9 @@ export function Field({
   const id = control?.props.id ?? generated;
   const hintId = hint ? `${id}-hint` : undefined;
   const errorId = error ? `${id}-error` : undefined;
-  const describedBy = [hintId, errorId].filter(Boolean).join(" ") || undefined;
+  // Keep any description the control already had, then the hint and error.
+  const describedBy =
+    [control?.props["aria-describedby"], hintId, errorId].filter(Boolean).join(" ") || undefined;
 
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>

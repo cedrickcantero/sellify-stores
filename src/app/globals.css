@@ -14,23 +14,28 @@
 
   /* Text */
   --foreground: #171717; /* neutral-900 */
-  --muted-foreground: #6b7280; /* gray-500 */
+  --muted-foreground: #6b7280; /* gray-500, on white or gray-50 only */
+  --secondary-foreground: #4b5563; /* gray-600, text on surface-muted */
 
   /* Surfaces and lines */
   --background: #f9fafb; /* gray-50, page background */
   --surface: #ffffff; /* cards, tables, inputs, sidebar */
   --surface-muted: #f3f4f6; /* gray-100, hover rows, neutral pills */
-  --border: #e5e7eb; /* gray-200 */
-  --input: #d1d5db; /* gray-300, control borders */
+  --border: #e5e7eb; /* gray-200, decorative lines between surfaces */
+  --input: #868c96; /* control borders and the off switch track: 3:1 on white (WCAG 1.4.11) */
   --ring: #9333ea;
 
-  /* Status */
+  /* Status. The base colour is for dots, fills and borders; text on a
+     status tint uses the darker *-text token so it meets 4.5:1. */
   --success: #16a34a;
+  --success-text: #15803d; /* green-700 */
   --success-tint: #f0fdf4;
   --warning: #d97706;
+  --warning-text: #b45309; /* amber-700 */
   --warning-tint: #fffbeb;
-  --error: #dc2626;
+  --error: #dc2626; /* also field error text on white */
   --error-hover: #b91c1c;
+  --error-text: #b91c1c; /* red-700 */
   --error-tint: #fef2f2;
   --overlay: rgb(23 23 23 / 0.4);
 }
@@ -49,6 +54,7 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-foreground: var(--foreground);
   --color-muted-foreground: var(--muted-foreground);
+  --color-secondary-foreground: var(--secondary-foreground);
   --color-background: var(--background);
   --color-surface: var(--surface);
   --color-surface-muted: var(--surface-muted);
@@ -56,11 +62,14 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-success: var(--success);
+  --color-success-text: var(--success-text);
   --color-success-tint: var(--success-tint);
   --color-warning: var(--warning);
+  --color-warning-text: var(--warning-text);
   --color-warning-tint: var(--warning-tint);
   --color-error: var(--error);
   --color-error-hover: var(--error-hover);
+  --color-error-text: var(--error-text);
   --color-error-tint: var(--error-tint);
   --color-overlay: var(--overlay);
 

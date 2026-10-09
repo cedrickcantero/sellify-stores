@@ -1,6 +1,7 @@
 // The Sellify platform design system. Backend pages import only from here
 // ("@/ui") and style only with the Sellify token classes. Rules for using
 // it: CLAUDE.md. The guideline behind it: docs/brand/sellify.md.
+export { Alert, type AlertTone } from "./alert";
 export { AppShell } from "./app-shell/app-shell";
 export { NAV_ITEMS, type NavItem } from "./app-shell/nav-items";
 export { Button, buttonVariants, type ButtonProps } from "./button";
@@ -13,6 +14,6 @@ export { Modal, ModalClose } from "./modal";
 export { PageHeader } from "./page-header";
 export { Pill } from "./pill";
 export { Select, type SelectOption } from "./select";
-export { StatusBadge, type Status, type StatusTone } from "./status-badge";
+export { STATUS_LIST, StatusBadge, type Status, type StatusTone } from "./status-badge";
 export { Switch } from "./switch";
 export { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from "./table";

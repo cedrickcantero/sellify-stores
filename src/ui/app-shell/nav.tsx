@@ -10,9 +10,9 @@ import { Button } from "../button";
 import { cn } from "../cn";
 import { NAV_ITEMS } from "./nav-items";
 
-export function Logo() {
+export function Logo({ onNavigate }: { onNavigate?: () => void }) {
   return (
-    <Link href="/dashboard" className="flex items-center gap-2 rounded-control">
+    <Link href="/dashboard" onClick={onNavigate} className="flex items-center gap-2 rounded-control">
       <Image src="/brand/sellify-logo.png" alt="" width={28} height={22} priority />
       <span className="font-heading text-section font-bold text-foreground">Sellify</span>
     </Link>
@@ -72,7 +72,7 @@ export function MobileNav() {
         >
           <div className="flex items-center justify-between">
             <Dialog.Title className="sr-only">Menu</Dialog.Title>
-            <Logo />
+            <Logo onNavigate={() => setOpen(false)} />
             <Dialog.Close asChild>
               <Button variant="ghost" size="icon" aria-label="Close menu">
                 <X aria-hidden />

@@ -18,20 +18,30 @@ status.
 | `primary-hover` | `#7E22CE` | Hover on primary buttons and links |
 | `primary-tint` | `#FAF5FF` | Background of the active nav item, selected pills, highlighted list options |
 | `primary-border` | `#D8B4FE` | Border of selected pills and purple pills |
+| `primary-foreground` | `#FFFFFF` | Text on primary and destructive buttons |
 | `foreground` | `#171717` | Main text and headings |
-| `muted-foreground` | `#6B7280` | Descriptions, table headers, hints, placeholders |
+| `secondary-foreground` | `#4B5563` | Text on `surface-muted`, such as neutral badges |
+| `muted-foreground` | `#6B7280` | Descriptions, table headers, hints, placeholders (on white or gray-50 only) |
 | `surface` | `#FFFFFF` | Cards, tables, inputs, sidebar, header, modals |
 | `background` | `#F9FAFB` | Page background behind the cards; table header row |
 | `surface-muted` | `#F3F4F6` | Hover on rows, ghost buttons and neutral badges |
-| `border` | `#E5E7EB` | Card, table and divider lines |
-| `input` | `#D1D5DB` | Borders of inputs, selects and secondary buttons |
+| `border` | `#E5E7EB` | Card, table and divider lines (decorative) |
+| `input` | `#868C96` | Borders of inputs, selects and secondary buttons, and the off switch track |
 | `success` | `#16A34A` | Completed, done, sent, online, in stock |
 | `warning` | `#D97706` | In progress, pending, sold out |
-| `error` | `#DC2626` | Errors, failed, needs refund, destructive buttons |
+| `error` | `#DC2626` | Field errors, failed, needs refund, destructive buttons |
 
 Success, warning and error each have a pale tint (`success-tint`
-`#F0FDF4`, `warning-tint` `#FFFBEB`, `error-tint` `#FEF2F2`) used as the
-background of their badge or message.
+`#F0FDF4`, `warning-tint` `#FFFBEB`, `error-tint` `#FEF2F2`) for the
+background of their badge or message, and a darker text colour
+(`success-text` `#15803D`, `warning-text` `#B45309`, `error-text`
+`#B91C1C`) for words on that tint. The base status colour is for dots,
+fills and borders only.
+
+Contrast is part of the guideline, not a nice-to-have: text needs at least
+4.5:1 against its background, and control borders and the off switch track
+at least 3:1 against the surface. A unit test (`src/ui/contrast.test.tsx`)
+checks every badge, alert, input and switch against these numbers.
 
 Never type a colour code into a page. Use the token classes (`bg-primary`,
 `text-muted-foreground`, `border-border`). The default Tailwind palette is
@@ -82,7 +92,8 @@ Two levels only.
 
 - The sidebar is 240px wide and lists the eight sections in this order:
   Dashboard, Inventory, POS, Repairs, Buybacks, Sales, Online Store, Email
-  outbox. On phones it becomes a menu behind a button in the header.
+  outbox. Below 1024px wide (phones and tablets) it becomes a menu behind a
+  button in the header.
 - The header shows the shop name and Log out.
 - Page content is at most 1200px wide.
 - Every page follows the same recipe, top to bottom:

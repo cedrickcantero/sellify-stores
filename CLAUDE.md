@@ -19,9 +19,14 @@ browser.
    components below. Style the space between them with layout classes
    (`flex`, `grid`, `gap-6`) and token classes only:
    - colour: `primary`, `primary-hover`, `primary-tint`, `primary-border`,
-     `foreground`, `muted-foreground`, `background`, `surface`,
-     `surface-muted`, `border`, `input`, `success`, `warning`, `error` (and
-     `*-tint`), as `bg-*`, `text-*`, `border-*`;
+     `primary-foreground`, `foreground`, `secondary-foreground`,
+     `muted-foreground`, `background`, `surface`, `surface-muted`, `border`,
+     `input`, and `success`, `warning`, `error` with their `*-tint` and
+     `*-text`, as `bg-*`, `text-*`, `border-*`. Words on a status tint use
+     the `*-text` token; the base status colour is for dots and fills;
+     `muted-foreground` text goes only on white or gray-50. Text must reach
+     4.5:1 and control borders 3:1 (`src/ui/contrast.test.tsx` checks the
+     ui components);
    - type: `text-page-title`, `text-section`, `text-body`, `text-small`,
      `font-heading`;
    - shape: `rounded-control`, `rounded-card`, `shadow-card`, `shadow-overlay`.
@@ -55,6 +60,7 @@ use it. Every page then gets the same thing. Colour values belong only in
 | `Select` | One choice from a short fixed list. `options`, `name` for forms, `value` / `onValueChange` when controlled. |
 | `Switch` | An on/off setting that applies at once: store online, banner shown, a tab visible. Has its own `label`. |
 | `StatusBadge` | The state of a record: `status` is one of `completed`, `needs_refund`, `booked`, `in_progress`, `done`, `cancelled`, `quoted`, `accepted`, `received`, `sent`, `failed`, `pending`, `verified`, `error`, `online`, `offline`, `in_stock`, `sold_out`. Label and colour follow from it. A new status gets a new entry in `src/ui/status-badge.tsx`. |
+| `Alert` | One sentence about the whole form or page: `tone` `error` (announced), `success`, `warning`, `info`. For one field's error use `Field`'s `error`. |
 | `Pill` | A category label, not a state: a sale's channel, a product kind. `tone`: `neutral` (default) or `primary`. |
 | `AppShell` | Rendered once by the `(backend)` layout. The sidebar sections are `NAV_ITEMS` in `src/ui/app-shell/nav-items.ts`. |
 
