@@ -81,7 +81,7 @@ export function Select({
           ref={triggerRef}
           id={id}
           aria-label={props["aria-label"]}
-        aria-invalid={props["aria-invalid"]}
+          aria-invalid={props["aria-invalid"]}
           aria-describedby={props["aria-describedby"]}
           className={cn(
             "flex h-10 w-full items-center justify-between gap-2 rounded-control border border-input bg-surface px-3 text-left text-body text-foreground shadow-card",
