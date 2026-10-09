@@ -2,6 +2,8 @@ import "server-only";
 import { buybackRepo, type BuybackRepo } from "./repos/buybacks";
 import { emailOutboxRepo, type EmailOutboxRepo } from "./repos/email-outbox";
 import { productRepo, type ProductRepo } from "./repos/products";
+import { db, type Tx } from "./db";
+import { repairsRepo, type RepairsRepo } from "./repos/repairs";
 import { shopRepo, type ShopRepo } from "./repos/shop";
 
 export type {
@@ -23,6 +25,19 @@ export type {
   BuybackStatus,
   OfferedBrand,
 } from "./repos/buybacks";
+export {
+  SlotTakenError,
+  type NewTicket,
+  type OfferedBrand as OfferedRepairBrand,
+  type RepairPrice,
+  type RepairsRepo,
+  type RepairTicket,
+  type RepairTicketSource,
+  type RepairTicketStatus,
+  type RepairType,
+  type TicketFilter,
+} from "./repos/repairs";
+export type { DbExecutor, Tx } from "./db";
 export { deleteOrganization, insertShop, isUniqueViolation, resolveShopBySlug } from "./shops";
 export { deviceCatalog, type DeviceModel } from "./device-catalog";
 export {
@@ -40,6 +55,7 @@ export type ShopRepos = {
   emailOutbox: EmailOutboxRepo;
   buybacks: BuybackRepo;
   products: ProductRepo;
+  repairs: RepairsRepo;
 };
 
 export function forShop(shopId: string): ShopRepos {
@@ -48,5 +64,12 @@ export function forShop(shopId: string): ShopRepos {
     emailOutbox: emailOutboxRepo(shopId),
     buybacks: buybackRepo(shopId),
     products: productRepo(shopId),
+    repairs: repairsRepo(shopId),
   };
+}
+
+// Runs `run` in one database transaction, for use cases that write a ticket
+// and its email outbox rows together: `inTransaction((tx) => repairs.insertTicket(tx, input))`.
+export function inTransaction<T>(run: (tx: Tx) => Promise<T>): Promise<T> {
+  return db.transaction(run);
 }

@@ -30,6 +30,8 @@ export function Select({
   className?: string;
   "aria-invalid"?: boolean;
   "aria-describedby"?: string;
+  /** Names the Select when no Field label does, for example in a table row. */
+  "aria-label"?: string;
 }) {
   const { id, name, value, defaultValue, onValueChange, required, disabled } = props;
   return (
@@ -45,6 +47,7 @@ export function Select({
         id={id}
         aria-invalid={props["aria-invalid"]}
         aria-describedby={props["aria-describedby"]}
+        aria-label={props["aria-label"]}
         className={cn(
           "flex h-10 w-full items-center justify-between gap-2 rounded-control border border-input bg-surface px-3 text-left text-body text-foreground shadow-card",
           "data-placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",

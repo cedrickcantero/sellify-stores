@@ -48,3 +48,9 @@ export const db: Database = new Proxy({} as Database, {
     return typeof value === "function" ? value.bind(real) : value;
   },
 });
+
+/** The handle inside `db.transaction(async (tx) => ...)`. */
+export type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
+
+/** Either the shared client or a transaction, for repository writes that can join one. */
+export type DbExecutor = Database | Tx;
