@@ -17,6 +17,8 @@ const { signInAction, signUpAction } = await import("./actions");
 const { seedTwoShops } = await import("@/test/seed");
 
 const TOO_MANY = "Too many attempts. Wait a minute, then try again.";
+// For tests that run 20 to 40 logins in a row, about a second each on Neon.
+const SLOW = 120_000;
 
 function form(entries: Record<string, string>): FormData {
   const data = new FormData();
@@ -63,7 +65,7 @@ describe("login rate limit", () => {
 
     expect(errors.slice(0, 30).every((e) => e === "Wrong email or password.")).toBe(true);
     expect(errors.at(-1)).toBe(TOO_MANY);
-  });
+  }, SLOW);
 
   it("refuses many logins from one IP across different emails", async () => {
     requestHeaders.current = new Headers({ "x-real-ip": "198.51.100.20" });
@@ -77,7 +79,7 @@ describe("login rate limit", () => {
 
     expect(errors.slice(0, 20).every((e) => e === "Wrong email or password.")).toBe(true);
     expect(errors.at(-1)).toBe(TOO_MANY);
-  });
+  }, SLOW);
 });
 
 describe("sign-up rate limit", () => {
