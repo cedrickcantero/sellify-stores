@@ -25,6 +25,7 @@ import {
   type SelectOption,
 } from "@/ui";
 import { AddProductButton } from "./add-product-button";
+import { NoticeBanner, NoticeProvider } from "./notice";
 import { RowActions } from "./row-actions";
 
 export const metadata: Metadata = { title: "Inventory | Sellify" };
@@ -82,12 +83,13 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
   const filtered = Object.keys(filter).length > 0;
 
   return (
-    <div className="flex flex-col gap-6">
+    <NoticeProvider>
       <PageHeader
         title="Inventory"
         description="Your phones and accessories, with stock and photos."
         actions={<AddProductButton models={models} photos={photos} />}
       />
+      <NoticeBanner />
       <FilterBar filters={filters} />
       <Table caption="Products">
         <TableHeader>
@@ -164,6 +166,6 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
           )}
         </TableBody>
       </Table>
-    </div>
+    </NoticeProvider>
   );
 }

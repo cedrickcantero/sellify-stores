@@ -10,6 +10,8 @@ import { saveProduct } from "@/services/save-product";
 // `values` echoes the typed fields back so the form keeps them after an error.
 export type ProductFormState = {
   saved?: boolean;
+  /** The edit was refused because stock moved; the list is refreshed, the form should close. */
+  stockChanged?: boolean;
   fields?: ProductFieldErrors;
   form?: string;
   values?: Record<string, string>;
@@ -41,7 +43,10 @@ export async function saveProductAction(
     imageUrls: form.getAll("image").filter((v): v is string => typeof v === "string"),
     expectedStockQty: /^\d{1,9}$/.test(expected) ? Number(expected) : undefined,
   });
-  if (!result.ok) return { ...result.error, values };
+  if (!result.ok) {
+    if (result.error.stockChanged) revalidatePath("/inventory");
+    return { ...result.error, values };
+  }
 
   revalidatePath("/inventory");
   return { saved: true };

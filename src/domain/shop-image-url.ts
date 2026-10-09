@@ -1,11 +1,22 @@
-const BLOB_HOST_SUFFIX = ".public.blob.vercel-storage.com";
-const PHOTO_FILE = /^[A-Za-z0-9._-]+\.(png|jpg|jpeg|gif|webp)$/i;
+import { PHOTO_FILE_PATTERN } from "./product-photo";
 
-// True only for a Vercel Blob URL that sits directly under images/<shopId>/
-// and names a raster image. Product photo URLs come back from the browser,
-// so a product only ever stores URLs that pass this check for its own shop.
-// SVG is not a product photo.
-export function isShopImageUrl(value: string, shopId: string): boolean {
+const TOKEN_STORE_ID = /^vercel_blob_rw_([A-Za-z0-9]+)_/;
+
+// The public host of the Blob store a read-write token belongs to, for
+// example "abc123.public.blob.vercel-storage.com". Null when the token is
+// missing or not in the vercel_blob_rw_<storeId>_<secret> format.
+export function blobHostForToken(token: string | undefined): string | null {
+  const storeId = token ? TOKEN_STORE_ID.exec(token)?.[1] : undefined;
+  return storeId ? `${storeId.toLowerCase()}.public.blob.vercel-storage.com` : null;
+}
+
+// True only for an https URL on this app's own Blob store host, directly
+// under images/<shopId>/, naming a raster image. Product photo URLs come
+// back from the browser, so a product only ever stores URLs that pass this
+// check for its own shop. With no known host nothing is accepted. SVG is not
+// a product photo.
+export function isShopImageUrl(value: string, shopId: string, blobHost: string | null): boolean {
+  if (!blobHost) return false;
   let url: URL;
   try {
     url = new URL(value);
@@ -13,14 +24,12 @@ export function isShopImageUrl(value: string, shopId: string): boolean {
     return false;
   }
   if (url.protocol !== "https:" || url.username || url.password || url.port) return false;
-  if (!url.hostname.endsWith(BLOB_HOST_SUFFIX) || url.hostname === BLOB_HOST_SUFFIX.slice(1)) {
-    return false;
-  }
+  if (url.hostname !== blobHost.toLowerCase()) return false;
   if (url.search || url.hash) return false;
 
   const prefix = `/images/${shopId}/`;
   if (!url.pathname.startsWith(prefix)) return false;
   const file = url.pathname.slice(prefix.length);
   // No nested folders, dot segments or encoded tricks: one plain file name.
-  return PHOTO_FILE.test(file) && !file.includes("..");
+  return PHOTO_FILE_PATTERN.test(file) && !file.includes("..");
 }

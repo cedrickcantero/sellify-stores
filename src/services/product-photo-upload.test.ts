@@ -27,6 +27,14 @@ describe("productPhotoTokenOptions", () => {
     expect(options.addRandomSuffix).toBe(true);
   });
 
+  it("makes the token valid for five minutes", () => {
+    const before = Date.now();
+    const { validUntil } = productPhotoTokenOptions(SHOP, `images/${SHOP}/front.png`);
+
+    expect(validUntil).toBeGreaterThanOrEqual(before + 5 * 60 * 1000);
+    expect(validUntil).toBeLessThanOrEqual(Date.now() + 5 * 60 * 1000);
+  });
+
   it.each([
     ["another shop's folder", "images/shop-2/front.png"],
     ["a prefix lookalike", "images/shop-10/front.png"],
@@ -76,11 +84,31 @@ describe("handleProductPhotoUpload", () => {
     expect(getActiveShop).toHaveBeenCalled();
   });
 
-  it("answers 400 with a plain message when the token request is refused", async () => {
-    handleUpload.mockRejectedValue(new Error("Photos must be in your shop's folder."));
+  it("hides unexpected errors behind a friendly message and logs the original", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const original = new Error("Vercel Blob: No token found");
+    handleUpload.mockRejectedValue(original);
 
     const result = await handleProductPhotoUpload(request, body);
 
-    expect(result.status).toBe(400);
+    expect(result).toEqual({
+      status: 400,
+      body: { error: "We could not upload that photo. Try again." },
+    });
+    expect(log).toHaveBeenCalledWith(expect.any(String), original);
+    log.mockRestore();
+  });
+
+  it("passes on the plain message when a photo is refused for its path", async () => {
+    handleUpload.mockImplementation(async ({ onBeforeGenerateToken }) => {
+      await onBeforeGenerateToken("images/shop-2/a.png", null, false);
+    });
+
+    const result = await handleProductPhotoUpload(request, body);
+
+    expect(result).toEqual({
+      status: 400,
+      body: { error: "Photos must be PNG, JPEG, GIF or WebP files in your shop's folder." },
+    });
   });
 });

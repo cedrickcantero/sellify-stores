@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const remove = vi.fn();
 vi.mock("@/data", () => ({ forShop: () => ({ products: { remove } }) }));
 vi.mock("@/auth/session", () => ({ getActiveShop: async () => ({ shopId: "s1" }) }));
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+const revalidatePath = vi.fn();
+vi.mock("next/cache", () => ({ revalidatePath }));
 const saveProduct = vi.fn();
 vi.mock("@/services/save-product", () => ({ saveProduct }));
 
@@ -24,6 +25,30 @@ describe("removeProductAction", () => {
 
     expect(await removeProductAction("3f2b8c1e-5d4a-4f6b-9a1c-2e7d8b9c0a1f")).toEqual({});
     expect(remove).toHaveBeenCalledWith("3f2b8c1e-5d4a-4f6b-9a1c-2e7d8b9c0a1f");
+  });
+});
+
+describe("saveProductAction on stale stock", () => {
+  it("revalidates the inventory and flags the change so the form can close", async () => {
+    const message = "Stock changed since you opened this. Check the new stock and edit again.";
+    saveProduct.mockResolvedValue({ ok: false, error: { form: message, stockChanged: true } });
+    const form = new FormData();
+    form.set("id", "p1");
+    form.set("expectedStockQty", "4");
+
+    const state = await saveProductAction({}, form);
+
+    expect(state).toMatchObject({ stockChanged: true, form: message });
+    expect(revalidatePath).toHaveBeenCalledWith("/inventory");
+  });
+
+  it("does not revalidate for an ordinary validation error", async () => {
+    saveProduct.mockResolvedValue({ ok: false, error: { fields: { title: "Enter a title." } } });
+
+    const state = await saveProductAction({}, new FormData());
+
+    expect(state.stockChanged).toBeUndefined();
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 });
 

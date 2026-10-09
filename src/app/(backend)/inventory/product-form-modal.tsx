@@ -9,6 +9,7 @@ import {
   PRODUCT_CONDITIONS,
   PRODUCT_KINDS,
 } from "@/domain/product";
+import { MAX_PHOTO_BYTES, PHOTO_EXTENSIONS } from "@/domain/product-photo";
 import {
   Alert,
   Button,
@@ -20,6 +21,7 @@ import {
   type SelectOption,
 } from "@/ui";
 import { saveProductAction, type ProductFormState } from "./actions";
+import { useNotice } from "./notice";
 
 export type EditableProduct = {
   id: string;
@@ -34,13 +36,6 @@ export type EditableProduct = {
 };
 
 const FORM_ID = "product-form";
-const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
-const PHOTO_EXTENSIONS: Record<string, string> = {
-  "image/png": "png",
-  "image/jpeg": "jpg",
-  "image/gif": "gif",
-  "image/webp": "webp",
-};
 
 // What the page knows that the form needs besides the product itself.
 export type PhotoUploadConfig = {
@@ -136,6 +131,7 @@ function ProductForm({
   // Photos are uploaded straight from the browser as soon as they are chosen;
   // the form then posts only their URLs. They live in state, so they survive
   // a validation error.
+  const { setNotice } = useNotice();
   const [images, setImages] = useState<string[]>(product?.images ?? []);
   const [uploading, setUploading] = useState(false);
   const [photoError, setPhotoError] = useState<string>();
@@ -143,8 +139,16 @@ function ProductForm({
   useEffect(() => onPending(pending), [pending, onPending]);
   useEffect(() => onUploading(uploading), [uploading, onUploading]);
   useEffect(() => {
-    if (state.saved) onSaved();
-  }, [state.saved, onSaved]);
+    if (state.saved) {
+      setNotice(undefined);
+      onSaved();
+    } else if (state.stockChanged) {
+      // The action already refreshed the list. Close this form (its props are
+      // stale) and tell the owner on the page.
+      setNotice(state.form);
+      onSaved();
+    }
+  }, [state.saved, state.stockChanged, state.form, onSaved, setNotice]);
 
   async function addPhotos(files: File[]) {
     setPhotoError(undefined);

@@ -1,25 +1,28 @@
 import "server-only";
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { getActiveShop } from "@/auth/session";
-import { MAX_IMAGE_BYTES } from "./upload-image";
+import { MAX_PHOTO_BYTES, PHOTO_EXTENSIONS, PHOTO_FILE_PATTERN } from "@/domain/product-photo";
 
 // Product photos go from the browser straight to Vercel Blob (a server action
 // body is capped well below a few photos on Vercel). The browser asks this
 // route for a short-lived token; the token is limited to the shop's own
 // folder, raster image types and 2 MB. SVG is not a product photo.
-const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
-const PHOTO_FILE = /^[A-Za-z0-9._-]+\.(png|jpg|jpeg|gif|webp)$/i;
+const TOKEN_LIFETIME_MS = 5 * 60 * 1000;
+const REFUSED = "Photos must be PNG, JPEG, GIF or WebP files in your shop's folder.";
+const FAILED = "We could not upload that photo. Try again.";
+
+// A refusal whose message is safe and useful to show the owner.
+class PhotoRefused extends Error {}
 
 export function productPhotoTokenOptions(shopId: string, pathname: string) {
   const prefix = `images/${shopId}/`;
   const file = pathname.startsWith(prefix) ? pathname.slice(prefix.length) : "";
-  if (!PHOTO_FILE.test(file) || file.includes("..")) {
-    throw new Error("Photos must be PNG, JPEG, GIF or WebP files in your shop's folder.");
-  }
+  if (!PHOTO_FILE_PATTERN.test(file) || file.includes("..")) throw new PhotoRefused(REFUSED);
   return {
-    allowedContentTypes: ALLOWED_TYPES,
-    maximumSizeInBytes: MAX_IMAGE_BYTES,
+    allowedContentTypes: Object.keys(PHOTO_EXTENSIONS),
+    maximumSizeInBytes: MAX_PHOTO_BYTES,
     addRandomSuffix: true,
+    validUntil: Date.now() + TOKEN_LIFETIME_MS,
   };
 }
 
@@ -43,7 +46,8 @@ export async function handleProductPhotoUpload(
     });
     return { status: 200, body: result };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Could not upload that photo.";
-    return { status: 400, body: { error: message } };
+    if (error instanceof PhotoRefused) return { status: 400, body: { error: error.message } };
+    console.error("Product photo upload failed.", error);
+    return { status: 400, body: { error: FAILED } };
   }
 }

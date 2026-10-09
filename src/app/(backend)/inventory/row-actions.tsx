@@ -3,7 +3,11 @@
 import { useState, useTransition } from "react";
 import { Alert, Button, Modal, ModalClose, type SelectOption } from "@/ui";
 import { removeProductAction } from "./actions";
-import { ProductFormModal, type EditableProduct, type PhotoUploadConfig } from "./product-form-modal";
+import {
+  ProductFormModal,
+  type EditableProduct,
+  type PhotoUploadConfig,
+} from "./product-form-modal";
 
 // Edit and Remove for one table row. Remove asks for confirmation first.
 export function RowActions({
@@ -40,7 +44,9 @@ export function RowActions({
         product={product}
         models={models}
         photos={photos}
-        open={editing} onOpenChange={setEditing} />
+        open={editing}
+        onOpenChange={setEditing}
+      />
       <Modal
         size="sm"
         open={removing}

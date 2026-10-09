@@ -18,11 +18,13 @@ const values = {
   deviceModelId: "",
 };
 
+const STOCK_CHANGED = "Stock changed since you opened this. Check the new stock and edit again.";
 const own = "https://abc.public.blob.vercel-storage.com/images/s1/front-x1.png";
 const other = "https://abc.public.blob.vercel-storage.com/images/s2/front-x1.png";
 
 beforeEach(() => {
   vi.resetAllMocks();
+  process.env.BLOB_READ_WRITE_TOKEN = "vercel_blob_rw_abc_secret";
   forShop.mockImplementation(() => ({ products: repo }));
   deviceCatalog.list.mockResolvedValue([{ id: "apple-iphone-13" }]);
   repo.create.mockImplementation(async (input: ProductInput) => ({ id: "p1", shopId: "s1", ...input }));
@@ -64,6 +66,17 @@ describe("saveProduct", () => {
         error: { fields: { images: "One photo link is not valid. Add that photo again." } },
       });
     }
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects a photo from another Blob store, and every photo when no store is configured", async () => {
+    const otherStore = "https://zzz.public.blob.vercel-storage.com/images/s1/a.png";
+    const foreign = await saveProduct("s1", { values, imageUrls: [otherStore] });
+    expect(foreign.ok).toBe(false);
+
+    delete process.env.BLOB_READ_WRITE_TOKEN;
+    const unset = await saveProduct("s1", { values, imageUrls: [own] });
+    expect(unset.ok).toBe(false);
     expect(repo.create).not.toHaveBeenCalled();
   });
 
@@ -110,7 +123,7 @@ describe("saveProduct", () => {
 
     expect(result).toEqual({
       ok: false,
-      error: { form: "Stock changed since you opened this. Reopen to edit." },
+      error: { form: STOCK_CHANGED, stockChanged: true },
     });
   });
 
