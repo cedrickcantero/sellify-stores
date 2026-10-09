@@ -67,6 +67,7 @@ export async function seedDeviceCatalog(url: string): Promise<number> {
 // Tables cleared between integration tests. The global device catalog is
 // kept. Add every new tenant table here as later tickets create it.
 const RESET_TABLES = [
+  "email_outbox",
   "shop",
   "invitation",
   "member",

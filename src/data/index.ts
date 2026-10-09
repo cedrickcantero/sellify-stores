@@ -1,7 +1,9 @@
 import "server-only";
+import { emailOutboxRepo, type EmailOutboxRepo } from "./repos/email-outbox";
 import { shopRepo, type ShopRepo } from "./repos/shop";
 
 export type { Shop, ShopRepo } from "./repos/shop";
+export type { EmailOutboxRepo, OutboxEmail } from "./repos/email-outbox";
 export { deleteOrganization, insertShop, isUniqueViolation, resolveShopBySlug } from "./shops";
 export { deviceCatalog, type DeviceModel } from "./device-catalog";
 export {
@@ -16,10 +18,12 @@ export { authDatabaseAdapter } from "./auth-adapter";
 // sales, store config, domains and the email outbox.
 export type ShopRepos = {
   shop: ShopRepo;
+  emailOutbox: EmailOutboxRepo;
 };
 
 export function forShop(shopId: string): ShopRepos {
   return {
     shop: shopRepo(shopId),
+    emailOutbox: emailOutboxRepo(shopId),
   };
 }

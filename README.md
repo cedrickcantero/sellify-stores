@@ -58,6 +58,8 @@ can take longer than 250ms and was failing intermittently with ETIMEDOUT.
 | `BETTER_AUTH_SECRET` | Secret for signing sessions (`openssl rand -base64 32`). |
 | `BETTER_AUTH_URL` | Public base URL of the app, for example `http://localhost:3000`. |
 | `BLOB_READ_WRITE_TOKEN` | Vercel Blob token for logo and product image uploads. |
+| `RESEND_API_KEY` | Resend API key for sending email. Unset: `sendEmail` records the email as `failed` with a clear error and never throws. |
+| `EMAIL_FROM` | Sender address for all email, on a domain verified in Resend. |
 | `APP_HOST` | Host that serves the backend. |
 | `STORE_ROOT_DOMAIN` | Root domain whose subdomains serve stores. |
 | `NEON_LOCAL_WS_PROXY` | Optional, local only. Routes the Neon driver to a plain local Postgres through `pnpm db:local-proxy`. |

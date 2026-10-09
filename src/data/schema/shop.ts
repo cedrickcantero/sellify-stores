@@ -1,4 +1,5 @@
-import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { index, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import type { EmailKind } from "@/domain/email";
 import { organization } from "./auth";
 
 // A shop is the tenant. Its id is the id of the Better Auth organization that
@@ -20,3 +21,25 @@ export const deviceModel = pgTable("device_model", {
   name: text().notNull(),
   storageOptions: text().array().notNull(),
 });
+
+// Every email Sellify sends for a shop. The row is written (pending) before
+// delivery is attempted, then marked sent or failed.
+export const emailOutbox = pgTable(
+  "email_outbox",
+  {
+    id: text()
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    shopId: text()
+      .notNull()
+      .references(() => shop.id, { onDelete: "cascade" }),
+    recipient: text().notNull(),
+    subject: text().notNull(),
+    body: text().notNull(),
+    kind: text().$type<EmailKind>().notNull(),
+    status: text().$type<"pending" | "sent" | "failed">().notNull().default("pending"),
+    error: text(),
+    createdAt: timestamp().notNull().defaultNow(),
+  },
+  (t) => [index("email_outbox_shop_created_idx").on(t.shopId, t.createdAt)],
+);
