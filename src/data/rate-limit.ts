@@ -22,3 +22,12 @@ export async function takeRateLimitToken(
   `);
   return result.rows.length > 0;
 }
+
+// Deletes buckets not touched for `hours`. Any bucket idle that long has
+// refilled for every limit in use, so dropping it changes nothing.
+export async function deleteStaleRateLimitBuckets(hours: number): Promise<number> {
+  const result = await db.execute(
+    sql`delete from rate_limit_bucket where updated_at < now() - make_interval(hours => ${hours}::int) returning key`,
+  );
+  return result.rows.length;
+}

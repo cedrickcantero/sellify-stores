@@ -1,3 +1,5 @@
+import { isReservedSlug } from "./slug";
+
 // Which surface a request is for, decided from its host and path alone (no
 // IO), so both the proxy and store resolution use the same rules:
 //
@@ -48,15 +50,18 @@ export function classifyRequest(host: string, pathname: string, env: HostEnv): R
   const slug = pathSlug(pathname);
   if (slug !== null && slug !== STORE_HOST_SEGMENT) return { kind: "path", slug };
 
+  // The app host wins, so APP_HOST=app.sellify.ie still reaches the backend
+  // when STORE_ROOT_DOMAIN=sellify.ie.
+  if (isAppHost(host, env)) return { kind: "app" };
+
   const hostname = hostnameOf(host);
   if (env.storeRootDomain) {
     const root = hostnameOf(env.storeRootDomain);
     if (hostname.endsWith(`.${root}`)) {
       const sub = hostname.slice(0, -(root.length + 1));
-      if (SLUG.test(sub)) return { kind: "subdomain", slug: sub };
+      if (SLUG.test(sub) && !isReservedSlug(sub)) return { kind: "subdomain", slug: sub };
     }
   }
-  if (isAppHost(host, env)) return { kind: "app" };
   return { kind: "domain", hostname };
 }
 

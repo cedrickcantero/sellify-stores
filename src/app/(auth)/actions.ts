@@ -14,21 +14,34 @@ export type AuthFormState = { error?: string; values?: Record<string, string> };
 
 const TOO_MANY = "Too many attempts. Wait a minute, then try again.";
 
-// Per IP and per email address, so one caller cannot hammer many accounts
-// and many callers cannot hammer one account. Both buckets are charged.
-const LIMITS = {
-  login: { ip: { capacity: 20, refillPerMinute: 10 }, email: { capacity: 5, refillPerMinute: 2 } },
-  signup: { ip: { capacity: 5, refillPerMinute: 1 }, email: { capacity: 3, refillPerMinute: 1 } },
-} as const;
+// Each attempt is charged to every bucket in its list and goes ahead only if
+// all of them still had a token.
+// - login: a strict bucket per email and IP stops guessing one account's
+//   password from one place; a loose bucket per email caps a spread-out
+//   attack without letting strangers lock the owner out; a bucket per IP
+//   stops one caller trying many accounts.
+// - signup: per IP and per email.
+type Limit = { scope: "ip" | "email" | "email-ip"; capacity: number; refillPerMinute: number };
+const LIMITS: Record<"login" | "signup", Limit[]> = {
+  login: [
+    { scope: "email-ip", capacity: 5, refillPerMinute: 2 },
+    { scope: "email", capacity: 30, refillPerMinute: 10 },
+    { scope: "ip", capacity: 20, refillPerMinute: 10 },
+  ],
+  signup: [
+    { scope: "ip", capacity: 5, refillPerMinute: 1 },
+    { scope: "email", capacity: 3, refillPerMinute: 1 },
+  ],
+};
 
-async function withinLimits(action: keyof typeof LIMITS, email: string): Promise<boolean> {
+async function withinLimits(action: keyof typeof LIMITS, rawEmail: string): Promise<boolean> {
   const ip = clientIp(await headers());
-  const limits = LIMITS[action];
-  const [byIp, byEmail] = await Promise.all([
-    rateLimit(`${action}:ip:${ip}`, limits.ip),
-    rateLimit(`${action}:email:${email.trim().toLowerCase().slice(0, 254)}`, limits.email),
-  ]);
-  return byIp && byEmail;
+  const email = rawEmail.trim().toLowerCase().slice(0, 254);
+  const keys = { ip, email, "email-ip": `${email}|${ip}` };
+  const results = await Promise.all(
+    LIMITS[action].map((limit) => rateLimit(`${action}:${limit.scope}:${keys[limit.scope]}`, limit)),
+  );
+  return results.every(Boolean);
 }
 
 function text(form: FormData, name: string): string {

@@ -9,7 +9,10 @@
 // other script URLs (also when entity encoded), every reference to anything
 // outside the file (href, src and url() must point to "#id"; an <image> may
 // also embed a PNG, JPEG, GIF or WebP data URL), comments, processing
-// instructions, CDATA and the doctype with its entities. Returns null when
+// instructions, CDATA and the doctype with its entities. href and src are
+// judged by local name whatever their prefix, CSS escapes (a backslash),
+// image-set() and src() are refused, and only the SVG and xlink namespace
+// declarations are kept. Returns null when
 // the input has no <svg> root element.
 
 const ALLOWED_ELEMENTS = new Set(
@@ -25,7 +28,9 @@ const ALLOWED_ELEMENTS = new Set(
   ].map((name) => name.toLowerCase()),
 );
 
-const REFERENCE_ATTRIBUTES = new Set(["href", "xlink:href", "src"]);
+// Local names (after any prefix) of attributes that point at a resource.
+const REFERENCE_ATTRIBUTES = new Set(["href", "src"]);
+const ALLOWED_NAMESPACES = new Set(["http://www.w3.org/2000/svg", "http://www.w3.org/1999/xlink"]);
 const SAFE_DATA_IMAGE = /^data:image\/(png|jpeg|gif|webp);base64,[a-z0-9+/=]+$/i;
 const ATTRIBUTE_NAME = /^[a-zA-Z_][-a-zA-Z0-9_.]*(:[a-zA-Z_][-a-zA-Z0-9_.]*)?$/;
 const ATTRIBUTE = /([^\s=/>]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
@@ -64,16 +69,21 @@ function urlsAreLocal(value: string): boolean {
 
 function isSafeAttribute(element: string, name: string, rawValue: string): boolean {
   const lower = name.toLowerCase();
-  if (!ATTRIBUTE_NAME.test(name) || lower.startsWith("on")) return false;
+  if (!ATTRIBUTE_NAME.test(name)) return false;
+  // Any prefix can be bound to the xlink namespace, so judge by local name.
+  const local = lower.includes(":") ? lower.slice(lower.indexOf(":") + 1) : lower;
+  if (local.startsWith("on")) return false;
   const value = normalised(rawValue);
 
-  if (REFERENCE_ATTRIBUTES.has(lower)) {
+  if (lower === "xmlns" || lower.startsWith("xmlns:")) return ALLOWED_NAMESPACES.has(value);
+  if (REFERENCE_ATTRIBUTES.has(local)) {
     if (isLocalReference(value)) return true;
     return element === "image" && SAFE_DATA_IMAGE.test(value);
   }
-  if (lower === "xmlns" || lower.startsWith("xmlns:")) return true;
+  // A backslash is a CSS escape (u\72l( is url(); refuse rather than decode.
+  if (value.includes("\\")) return false;
   if (/(javascript|vbscript|livescript|data):/.test(value)) return false;
-  if (/expression\(|@import|behavior:|-moz-binding/.test(value)) return false;
+  if (/expression\(|@import|behavior:|-moz-binding|image-set\(|(^|[^a-z-])src\(/.test(value)) return false;
   return urlsAreLocal(value);
 }
 

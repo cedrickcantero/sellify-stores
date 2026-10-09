@@ -9,10 +9,19 @@ export function isHoneypotTripped(form: FormData): boolean {
   return typeof value === "string" ? value.trim() !== "" : value !== null;
 }
 
-// The caller's IP for rate limit keys. On Vercel x-forwarded-for is set by
-// the platform; the first entry is the client.
+// The caller's IP for rate limit keys. On Vercel x-real-ip is set by the
+// platform to the connecting client (what @vercel/functions ipAddress()
+// reads); a client can prepend entries to x-forwarded-for, so that is only
+// a fallback for other hosts.
 export function clientIp(headers: Headers): string {
-  const forwarded = headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  if (forwarded) return forwarded;
-  return headers.get("x-real-ip")?.trim() || "unknown";
+  const real = headers.get("x-real-ip")?.trim();
+  if (real) return real;
+  return headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+}
+
+// Test override so suites that sign up and log in repeatedly do not trip
+// the limits: RATE_LIMIT_DISABLED=1, honoured only outside production and
+// never on Vercel.
+export function isRateLimitDisabled(env: Record<string, string | undefined>): boolean {
+  return env.RATE_LIMIT_DISABLED === "1" && env.NODE_ENV !== "production" && !env.VERCEL;
 }

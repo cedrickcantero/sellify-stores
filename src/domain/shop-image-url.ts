@@ -15,7 +15,13 @@ export function blobHostForToken(token: string | undefined): string | null {
 // back from the browser, so a product only ever stores URLs that pass this
 // check for its own shop. With no known host nothing is accepted. SVG is not
 // a product photo.
-export function isShopImageUrl(value: string, shopId: string, blobHost: string | null): boolean {
+// `filePattern` lets other image kinds (store logos) reuse the same checks.
+export function isShopImageUrl(
+  value: string,
+  shopId: string,
+  blobHost: string | null,
+  filePattern: RegExp = PHOTO_FILE_PATTERN,
+): boolean {
   if (!blobHost) return false;
   let url: URL;
   try {
@@ -31,5 +37,5 @@ export function isShopImageUrl(value: string, shopId: string, blobHost: string |
   if (!url.pathname.startsWith(prefix)) return false;
   const file = url.pathname.slice(prefix.length);
   // No nested folders, dot segments or encoded tricks: one plain file name.
-  return PHOTO_FILE_PATTERN.test(file) && !file.includes("..");
+  return filePattern.test(file) && !file.includes("..");
 }

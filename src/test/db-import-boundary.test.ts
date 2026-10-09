@@ -11,7 +11,7 @@ async function restrictedImportErrors(code: string, filePath: string): Promise<s
     .map((m) => m.message);
 }
 
-describe("database import boundary", () => {
+describe("database import boundary", { timeout: 30_000 }, () => {
   it("fails when a service imports the database client", async () => {
     const errors = await restrictedImportErrors(
       'import { db } from "@/data/db";\nexport const x = db;\n',

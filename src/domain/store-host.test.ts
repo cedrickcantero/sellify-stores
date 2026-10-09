@@ -65,6 +65,19 @@ describe("classifyRequest", () => {
     });
   });
 
+  it("keeps the backend reachable when the app host is itself a subdomain of the store root", () => {
+    const nested = { appHost: "app.sellify.ie", storeRootDomain: "sellify.ie" };
+    expect(classifyRequest("app.sellify.ie", "/dashboard", nested)).toEqual({ kind: "app" });
+    expect(classifyRequest("fixit.sellify.ie", "/", nested)).toEqual({ kind: "subdomain", slug: "fixit" });
+  });
+
+  it("never treats a reserved name as a store subdomain", () => {
+    expect(classifyRequest("www.stores.example.com", "/", env)).toEqual({
+      kind: "domain",
+      hostname: "www.stores.example.com",
+    });
+  });
+
   it("gives a subdomain of localhost to the store when localhost is the store root", () => {
     expect(
       classifyRequest("fixit.localhost:3000", "/", { appHost: "localhost:3000", storeRootDomain: "localhost" }),

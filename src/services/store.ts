@@ -9,7 +9,9 @@ import {
   type DeepPartial,
   type FieldErrors,
 } from "@/domain/store-config";
+import { blobHostForToken } from "@/domain/shop-image-url";
 import { classifyRequest, hostEnv } from "@/domain/store-host";
+import { isShopLogoUrl } from "@/domain/store-logo-url";
 
 // Online store use cases: the draft the owner edits, publishing it, the
 // online switch, finding the shop behind a store address and what that
@@ -74,6 +76,12 @@ export async function saveDraft(
   const merged = mergeStoreConfig(await currentDraft(shopId), patch);
   const parsed = StoreConfig.safeParse(merged);
   if (!parsed.success) return err(fieldErrorsOf(parsed.error));
+  // A logo must be one this shop uploaded to this project's Blob store.
+  const logoUrl = parsed.data.brand.logoUrl;
+  const blobHost = blobHostForToken(process.env.BLOB_READ_WRITE_TOKEN);
+  if (logoUrl && !isShopLogoUrl(logoUrl, shopId, blobHost)) {
+    return err({ "brand.logoUrl": "Upload the logo again." });
+  }
   await forShop(shopId).storeConfig.saveDraft(parsed.data);
   return ok(parsed.data);
 }

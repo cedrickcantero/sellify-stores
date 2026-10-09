@@ -1,38 +1,49 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { getActiveShop } from "@/auth/session";
 import type { FieldErrors } from "@/domain/store-config";
 import { publishStore, saveDraft, setStoreOnline } from "@/services/store";
-import { uploadImage } from "@/services/upload-image";
 
-export type StoreFormState = { errors?: FieldErrors; error?: string; message?: string };
+export type StoreFormState = {
+  errors?: FieldErrors;
+  error?: string;
+  message?: string;
+  /** What the owner typed, so the form keeps it after an error. */
+  values?: { name: string };
+};
 
-const UPLOAD_ERRORS = {
-  too_large: "Choose a logo under 2 MB.",
-  bad_type: "Choose a PNG, JPEG, GIF, WebP or SVG logo.",
-} as const;
+// The logo file is uploaded first through POST /api/uploads/logo; this
+// action receives only its URL. saveDraft checks the URL is this shop's
+// upload on the project's Blob store.
+const detailsInput = z.object({
+  name: z.string().trim().min(1, "Enter a store name.").max(80, "Use 80 characters or fewer for the store name."),
+  logoUrl: z.string().max(2048).optional(),
+});
 
-// Store name and logo. The logo, when chosen, is uploaded first; both are
-// saved to the draft, which customers see only after Publish.
+function text(form: FormData, name: string): string | undefined {
+  const value = form.get(name);
+  return typeof value === "string" && value !== "" ? value : undefined;
+}
+
 export async function saveStoreDetailsAction(_prev: StoreFormState, form: FormData): Promise<StoreFormState> {
   const { shopId } = await getActiveShop();
-  const name = form.get("name");
-  const logo = form.get("logo");
-
-  let logoUrl: string | undefined;
-  if (logo instanceof File && logo.size > 0) {
-    const uploaded = await uploadImage(shopId, logo);
-    if (!uploaded.ok) return { errors: { "brand.logoUrl": UPLOAD_ERRORS[uploaded.error] } };
-    logoUrl = uploaded.value.url;
+  const values = { name: text(form, "name") ?? "" };
+  const parsed = detailsInput.safeParse({ name: values.name, logoUrl: text(form, "logoUrl") });
+  if (!parsed.success) {
+    const nameIssue = parsed.error.issues.find((issue) => issue.path[0] === "name");
+    return {
+      values,
+      errors: nameIssue ? { "brand.name": nameIssue.message } : { "brand.logoUrl": "Upload the logo again." },
+    };
   }
 
-  const saved = await saveDraft(shopId, {
-    brand: { name: typeof name === "string" ? name : "", ...(logoUrl ? { logoUrl } : {}) },
-  });
-  if (!saved.ok) return { errors: saved.error };
+  const { name, logoUrl } = parsed.data;
+  const saved = await saveDraft(shopId, { brand: { name, ...(logoUrl ? { logoUrl } : {}) } });
+  if (!saved.ok) return { values, errors: saved.error };
   revalidatePath("/online-store");
-  return { message: "Details saved. Publish to show them in your store." };
+  return { values, message: "Details saved. Publish to show them in your store." };
 }
 
 export async function publishStoreAction(): Promise<StoreFormState> {
@@ -45,8 +56,13 @@ export async function publishStoreAction(): Promise<StoreFormState> {
   return { message: "Store published. It is live at your store address." };
 }
 
-export async function setStoreOnlineAction(online: boolean): Promise<void> {
+const onlineInput = z.boolean();
+
+export async function setStoreOnlineAction(online: unknown): Promise<{ ok: boolean }> {
   const { shopId } = await getActiveShop();
-  await setStoreOnline(shopId, online === true);
+  const parsed = onlineInput.safeParse(online);
+  if (!parsed.success) return { ok: false };
+  await setStoreOnline(shopId, parsed.data);
   revalidatePath("/online-store");
+  return { ok: true };
 }

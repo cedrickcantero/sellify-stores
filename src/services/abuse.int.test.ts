@@ -1,5 +1,45 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { ageBucket } from "@/test/rate-limit";
 import { rateLimit } from "./abuse";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+});
+
+const once = { capacity: 1, refillPerMinute: 0 };
+
+describe("rateLimit clean-up", () => {
+  it("now and then deletes buckets idle for a day, and only those", async () => {
+    // Never clean up while setting up.
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
+    await rateLimit("test:stale", once);
+    await rateLimit("test:recent", once);
+    await ageBucket("test:stale", 25);
+    await ageBucket("test:recent", 1);
+
+    // This call draws the clean-up.
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    await rateLimit("test:other", once);
+
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
+    // The stale bucket was deleted, so it starts full again.
+    expect(await rateLimit("test:stale", once)).toBe(true);
+    // The recent one is still there and still empty (no refill).
+    expect(await rateLimit("test:recent", once)).toBe(false);
+  });
+});
+
+describe("rateLimit test override", () => {
+  it("lets every call through with RATE_LIMIT_DISABLED=1 outside production", async () => {
+    await rateLimit("test:override", once);
+    expect(await rateLimit("test:override", once)).toBe(false);
+
+    vi.stubEnv("RATE_LIMIT_DISABLED", "1");
+    expect(await rateLimit("test:override", once)).toBe(true);
+    expect(await rateLimit("test:override", once)).toBe(true);
+  });
+});
 
 describe("rateLimit", () => {
   it("allows up to capacity requests, then refuses", async () => {

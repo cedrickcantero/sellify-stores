@@ -61,6 +61,36 @@ describe("sanitizeSvg", () => {
     expect(out).not.toContain("image/svg+xml");
   });
 
+  it("treats href and src under any namespace prefix as references", () => {
+    const out = sanitizeSvg(
+      '<svg xmlns="http://www.w3.org/2000/svg" xmlns:foo="http://www.w3.org/1999/xlink">' +
+        '<image foo:href="https://evil.example/a.png"/><use bar:src="https://evil.example/b"/><use foo:href="#ok"/></svg>',
+    );
+    expect(out).not.toContain("evil.example");
+    expect(out).toContain('<use foo:href="#ok"/>');
+  });
+
+  it("removes CSS-escaped url(), image-set() and src() references", () => {
+    const out = sanitizeSvg(
+      wrap(
+        '<rect style="fill: u\\72l(https://evil.example/a)"/>' +
+          '<rect style="background: image-set(&quot;https://evil.example/b.png&quot; 1x)"/>' +
+          '<rect style="mask: src(https://evil.example/c)"/><rect style="fill: red"/>',
+      ),
+    );
+    expect(out).not.toMatch(/evil\.example|image-set|src\(|\\/);
+    expect(out).toContain('<rect style="fill: red"/>');
+  });
+
+  it("keeps only the SVG and xlink namespace declarations", () => {
+    const out = sanitizeSvg(
+      '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:h="http://www.w3.org/1999/xhtml" xmlns:e="https://evil.example/ns"><rect/></svg>',
+    );
+    expect(out).toBe(
+      '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><rect/></svg>',
+    );
+  });
+
   it("removes foreignObject and everything inside it", () => {
     const out = sanitizeSvg(
       wrap('<foreignObject width="10"><body xmlns="http://www.w3.org/1999/xhtml"><iframe src="https://evil.example"/></body></foreignObject><circle r="1"/>'),

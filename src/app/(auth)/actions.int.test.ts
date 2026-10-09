@@ -25,12 +25,11 @@ function form(entries: Record<string, string>): FormData {
 }
 
 describe("login rate limit", () => {
-  it("refuses a sixth quick login attempt for one email with a friendly error", async () => {
+  it("refuses a sixth quick login attempt for one email from one IP with a friendly error", async () => {
     const { shopA } = await seedTwoShops();
+    requestHeaders.current = new Headers({ "x-real-ip": "203.0.113.50" });
     const attempts = [];
     for (let i = 0; i < 6; i++) {
-      // A different IP each time: the email bucket alone must stop it.
-      requestHeaders.current = new Headers({ "x-forwarded-for": `203.0.113.${i + 1}` });
       attempts.push(await signInAction({}, form({ email: shopA.owner.email, password: "wrong-password" })));
     }
 
@@ -38,8 +37,36 @@ describe("login rate limit", () => {
     expect(attempts[5]).toEqual({ values: { email: shopA.owner.email }, error: TOO_MANY });
   });
 
+  it("does not lock the owner out when someone else hammers their email from other IPs", async () => {
+    const { shopA } = await seedTwoShops();
+    for (let i = 0; i < 6; i++) {
+      requestHeaders.current = new Headers({ "x-real-ip": `203.0.113.${i + 1}` });
+      const result = await signInAction({}, form({ email: shopA.owner.email, password: "wrong-password" }));
+      expect(result.error).toBe("Wrong email or password.");
+    }
+
+    // The owner, on their own IP, still gets through to the password check.
+    requestHeaders.current = new Headers({ "x-real-ip": "198.51.100.77" });
+    await expect(
+      signInAction({}, form({ email: shopA.owner.email, password: shopA.owner.password })),
+    ).rejects.toThrow("redirect:/dashboard");
+  });
+
+  it("still caps attempts on one email across many IPs", async () => {
+    const { shopA } = await seedTwoShops();
+    const errors: (string | undefined)[] = [];
+    // The loose per-email bucket holds 30 and refills 10 a minute.
+    for (let i = 0; i < 40 && errors.at(-1) !== TOO_MANY; i++) {
+      requestHeaders.current = new Headers({ "x-real-ip": `192.0.2.${i + 1}` });
+      errors.push((await signInAction({}, form({ email: shopA.owner.email, password: "nope-nope" }))).error);
+    }
+
+    expect(errors.slice(0, 30).every((e) => e === "Wrong email or password.")).toBe(true);
+    expect(errors.at(-1)).toBe(TOO_MANY);
+  });
+
   it("refuses many logins from one IP across different emails", async () => {
-    requestHeaders.current = new Headers({ "x-forwarded-for": "198.51.100.20" });
+    requestHeaders.current = new Headers({ "x-real-ip": "198.51.100.20" });
     const errors: (string | undefined)[] = [];
     // The IP bucket holds 20 and refills slowly (10 a minute), so a few
     // attempts may be refilled while the loop runs.
@@ -55,7 +82,7 @@ describe("login rate limit", () => {
 
 describe("sign-up rate limit", () => {
   it("refuses a sixth sign-up from one IP", async () => {
-    requestHeaders.current = new Headers({ "x-forwarded-for": "198.51.100.30" });
+    requestHeaders.current = new Headers({ "x-real-ip": "198.51.100.30" });
     const results = [];
     for (let i = 0; i < 6; i++) {
       // Invalid input, so nothing is created; the attempt still counts.

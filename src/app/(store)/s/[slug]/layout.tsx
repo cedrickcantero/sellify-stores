@@ -13,7 +13,8 @@ export async function generateMetadata({ params }: LayoutProps<"/s/[slug]">): Pr
   return {
     title: brand.name,
     description: store.storefront.status === "live" ? store.storefront.config.content.about.slice(0, 160) : undefined,
-    robots: store.preview ? { index: false } : undefined,
+    // Previews and the offline page must not be indexed.
+    robots: store.preview || store.storefront.status === "offline" ? { index: false, follow: false } : undefined,
   };
 }
 

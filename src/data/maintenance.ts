@@ -173,6 +173,14 @@ export async function insertShopWithOwner(
   return { shopId, userId };
 }
 
+// Test helper: pretends a rate limit bucket was last touched `hours` ago.
+export async function ageRateLimitBucket(url: string, key: string, hours: number): Promise<void> {
+  await assertMarkedOnce(url);
+  await sharedDatabase(url).execute(
+    sql`update rate_limit_bucket set updated_at = now() - make_interval(hours => ${hours}::int) where key = ${key}`,
+  );
+}
+
 export async function resetTenantData(url: string): Promise<void> {
   const tables = RESET_TABLES.map((t) => `"${t}"`).join(", ");
   // The marker check and the truncate run as one statement, so the check

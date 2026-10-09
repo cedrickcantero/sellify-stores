@@ -19,10 +19,20 @@ export function StoreStatusCard({
   const [, startTransition] = useTransition();
   const live = published && optimisticOnline;
 
+  const [toggleError, setToggleError] = useState<string | null>(null);
+
+  // The switch moves at once; if saving fails it moves back and says so.
   function toggleOnline(checked: boolean) {
+    setToggleError(null);
     startTransition(async () => {
       setOptimisticOnline(checked);
-      await setStoreOnlineAction(checked);
+      const failed = "Could not change whether your store is online. Try again.";
+      try {
+        const result = await setStoreOnlineAction(checked);
+        if (!result.ok) setToggleError(failed);
+      } catch {
+        setToggleError(failed);
+      }
     });
   }
 
@@ -60,6 +70,7 @@ export function StoreStatusCard({
         disabled={!published}
         onCheckedChange={toggleOnline}
       />
+      {toggleError ? <Alert tone="error">{toggleError}</Alert> : null}
       {state.error ? <Alert tone="error">{state.error}</Alert> : null}
       {state.message ? <Alert tone="success">{state.message}</Alert> : null}
     </Card>

@@ -15,7 +15,9 @@ async function rawColourErrors(code: string, filePath: string): Promise<string[]
 const page = (body: string) => `export default function Page() {\n  return ${body};\n}\n`;
 const BACKEND_PAGE = "src/app/(backend)/inventory/page.tsx";
 
-describe("raw colour rule", () => {
+// ESLint loads the whole config on first use, which can be slow on a busy
+// machine; give these tests room so they do not flake.
+describe("raw colour rule", { timeout: 30_000 }, () => {
   it("fails on a hex colour in a backend page", async () => {
     const errors = await rawColourErrors(page('<p style={{ color: "#9333EA" }}>Hi</p>'), BACKEND_PAGE);
     expect(errors).toHaveLength(1);

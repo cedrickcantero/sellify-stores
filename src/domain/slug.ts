@@ -14,10 +14,19 @@ export function slugify(name: string): string {
   return slug || "shop";
 }
 
-// The base slug first, then "<base>-2", "<base>-3" and so on, for picking the
-// first one that is not taken yet.
+// Names no shop may take: they would collide with the app's own hosts when
+// stores are served as <slug>.<STORE_ROOT_DOMAIN>, or with the /s/_host
+// rewrite segment.
+const RESERVED_SLUGS = new Set(["www", "app", "api", "admin", "mail", "s", "_host"]);
+
+export function isReservedSlug(slug: string): boolean {
+  return RESERVED_SLUGS.has(slug.toLowerCase());
+}
+
+// The base slug first (unless it is reserved), then "<base>-2", "<base>-3"
+// and so on, for picking the first one that is not taken yet.
 export function* slugCandidates(base: string): Generator<string, never, unknown> {
-  yield base;
+  if (!isReservedSlug(base)) yield base;
   for (let n = 2; ; n++) {
     yield `${base}-${n}`;
   }

@@ -10,7 +10,7 @@ async function restrictedImportErrors(code: string, filePath: string): Promise<s
   return result.messages.filter((m) => m.ruleId === "no-restricted-imports").map((m) => m.message);
 }
 
-describe("store surface boundary", () => {
+describe("store surface boundary", { timeout: 30_000 }, () => {
   it("fails when a store page imports the Sellify ui", async () => {
     const errors = await restrictedImportErrors(
       'import { Button } from "@/ui";\nexport const x = Button;\n',

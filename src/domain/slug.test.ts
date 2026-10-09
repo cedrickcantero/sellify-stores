@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { slugCandidates, slugify } from "./slug";
+import { isReservedSlug, slugCandidates, slugify } from "./slug";
+
+describe("reserved slugs", () => {
+  it.each(["www", "app", "api", "admin", "mail", "s", "_host"])("never offers %s to a shop", (reserved) => {
+    expect(isReservedSlug(reserved)).toBe(true);
+    expect(slugCandidates(reserved).next().value).toBe(`${reserved}-2`);
+  });
+
+  it("offers an ordinary slug as it is", () => {
+    expect(isReservedSlug("fixit-galway")).toBe(false);
+    expect(slugCandidates("apps").next().value).toBe("apps");
+  });
+});
 
 describe("slugify", () => {
   it("lowercases and joins words with hyphens", () => {

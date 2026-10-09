@@ -27,7 +27,7 @@ export default async function OnlineStorePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Online Store" description="Set up, preview and publish your online store." />
+      <PageHeader title="Online Store" description="Set up and publish your online store." />
       <StoreStatusCard address={address} published={settings.published} online={settings.online} />
       <StoreDetailsForm name={settings.draft.brand.name} logoUrl={settings.draft.brand.logoUrl} />
     </div>

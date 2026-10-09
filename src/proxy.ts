@@ -15,9 +15,10 @@ export function proxy(request: NextRequest): NextResponse {
   const target = classifyRequest(host, pathname, hostEnv());
 
   // Store layouts cannot read search params, so the preview flag travels as
-  // a request header. Whatever the browser sent under that name is dropped.
-  // It only asks for a preview: getStorefront still shows the draft only to
-  // a member of the shop.
+  // a request header (any copy the browser sent is replaced). The header
+  // only asks for a preview and grants nothing: the guard is the membership
+  // check in getStorefront, which shows the draft only to a member of the
+  // shop signed in on this request.
   const preview = target.kind !== "app" && searchParams.has("preview");
   const headers = new Headers(request.headers);
   headers.delete(PREVIEW_HEADER);

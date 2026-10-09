@@ -125,6 +125,29 @@ describe("saveDraft", () => {
   });
 });
 
+describe("saveDraft logo", () => {
+  const HOST = "abc123.public.blob.vercel-storage.com";
+
+  it("accepts only a logo uploaded to this project's Blob store for this shop", async () => {
+    vi.stubEnv("BLOB_READ_WRITE_TOKEN", "vercel_blob_rw_abc123_secretpart");
+    const { shopA, shopB } = await seedTwoShops();
+    const mine = `https://${HOST}/images/${shopA.shopId}/0b7c9a2e.svg`;
+
+    const ok = await saveDraft(shopA.shopId, { brand: { logoUrl: mine } });
+    expect(ok.ok && ok.value.brand.logoUrl).toBe(mine);
+
+    for (const logoUrl of [
+      "https://evil.example/logo.png",
+      `https://${HOST}/images/${shopB.shopId}/0b7c9a2e.png`,
+    ]) {
+      expect(await saveDraft(shopA.shopId, { brand: { logoUrl } })).toEqual({
+        ok: false,
+        error: { "brand.logoUrl": "Upload the logo again." },
+      });
+    }
+  });
+});
+
 describe("getStoreSettings", () => {
   it("reports the draft and whether the store is published and online", async () => {
     const { shopA } = await seedTwoShops();

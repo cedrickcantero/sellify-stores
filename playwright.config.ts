@@ -24,6 +24,9 @@ export default defineConfig({
         command: "pnpm dev",
         url: "http://localhost:3000/login",
         reuseExistingServer: true,
+        // Smoke tests sign up and log in repeatedly; the override is
+        // ignored in production and on Vercel.
+        env: { RATE_LIMIT_DISABLED: "1" },
         timeout: 120_000,
       },
 });

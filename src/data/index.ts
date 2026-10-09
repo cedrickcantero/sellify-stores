@@ -45,7 +45,7 @@ export type { DbExecutor, Tx } from "./db";
 export type { StoreConfigRepo, StoreConfigRow, StoreConfigVersion, StoredConfig } from "./repos/store-config";
 export type { CustomDomain, CustomDomainRepo, CustomDomainStatus } from "./repos/custom-domain";
 export { resolveShopByVerifiedHostname } from "./store-resolution";
-export { takeRateLimitToken } from "./rate-limit";
+export { deleteStaleRateLimitBuckets, takeRateLimitToken } from "./rate-limit";
 export { deleteOrganization, insertShop, isUniqueViolation, resolveShopBySlug } from "./shops";
 export { deviceCatalog, type DeviceModel } from "./device-catalog";
 export {

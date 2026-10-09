@@ -62,6 +62,7 @@ can take longer than 250ms and was failing intermittently with ETIMEDOUT.
 | `EMAIL_FROM` | Sender address for all email, on a domain verified in Resend. |
 | `APP_HOST` | Host that serves the backend. `localhost` and `*.vercel.app` always count as the app host too. |
 | `STORE_ROOT_DOMAIN` | Optional. Root domain whose subdomains serve stores (`<slug>.<root>`). Without it, stores are served at `/s/<slug>`. |
+| `RATE_LIMIT_DISABLED` | Optional, tests only. `1` turns `rateLimit` off so suites that sign up and log in repeatedly are not refused. Ignored when `NODE_ENV=production` and on Vercel. The local Playwright server sets it. |
 | `NEON_LOCAL_WS_PROXY` | Optional, local only. Routes the Neon driver to a plain local Postgres through `pnpm db:local-proxy`. |
 
 On Vercel, set the same variables (except `TEST_DATABASE_URL` and
@@ -137,5 +138,14 @@ CSS variables derived from the store's brand settings
 
 Public store forms use `rateLimit(key, { capacity, refillPerMinute })`
 (a Postgres token bucket in `rate_limit_bucket`) and the `HoneypotField`
-with `isHoneypotTripped(form)`. Login and sign-up are rate limited per IP
-and per email.
+with `isHoneypotTripped(form)`. Buckets idle for a day are deleted on about
+one call in 100. Login is limited per email and IP (strict), per email
+(loose, so strangers cannot lock an owner out) and per IP; sign-up per IP
+and per email. The client IP is `x-real-ip` (set by Vercel), falling back
+to the first `x-forwarded-for` entry.
+
+Store logos are uploaded by the signed-in owner to `POST /api/uploads/logo`
+(at most 2 MB; SVGs sanitised), and only the returned URL is saved to the
+draft. `saveDraft` accepts a logo URL only on this project's Blob host under
+`images/<shopId>/`. Slugs `www`, `app`, `api`, `admin`, `mail`, `s` and
+`_host` are reserved and never given to a shop.
