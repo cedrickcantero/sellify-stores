@@ -40,6 +40,44 @@ describe("recordPosSale", () => {
     if (result.ok) expect(sales[0].id).toBe(result.value.saleId);
   });
 
+  it("returns the saved total", async () => {
+    const { shopA } = await seedTwoShops();
+    const repos = forShop(shopA.shopId);
+    const phone = await repos.products.create(input({ price: 12345, stockQty: 3 }));
+
+    const result = await recordPosSale(shopA.shopId, [{ productId: phone.id, qty: 3 }]);
+
+    expect(result).toEqual({ ok: true, value: { saleId: expect.any(String), total: 37035 } });
+  });
+
+  it("two concurrent sales over the same products in opposite order both complete", async () => {
+    const { shopA } = await seedTwoShops();
+    const repos = forShop(shopA.shopId);
+    const a = await repos.products.create(input({ title: "A", stockQty: 20 }));
+    const b = await repos.products.create(input({ title: "B", stockQty: 20 }));
+
+    const results = await Promise.all(
+      Array.from({ length: 6 }, (_, i) =>
+        recordPosSale(
+          shopA.shopId,
+          i % 2 === 0
+            ? [
+                { productId: a.id, qty: 1 },
+                { productId: b.id, qty: 1 },
+              ]
+            : [
+                { productId: b.id, qty: 1 },
+                { productId: a.id, qty: 1 },
+              ],
+        ),
+      ),
+    );
+
+    expect(results.every((r) => r.ok)).toBe(true);
+    expect((await repos.products.get(a.id))?.stockQty).toBe(14);
+    expect((await repos.products.get(b.id))?.stockQty).toBe(14);
+  });
+
   it("prices the sale from the database and merges duplicate lines", async () => {
     const { shopA } = await seedTwoShops();
     const repos = forShop(shopA.shopId);
@@ -206,6 +244,59 @@ describe("sales.createOnline", () => {
     });
 
     expect((await repos.sales.list())[0].status).toBe("needs_refund");
+  });
+});
+
+describe("sales.lockProducts", () => {
+  it("hides archived products unless includeArchived is set, and never returns another shop's", async () => {
+    const { shopA, shopB } = await seedTwoShops();
+    const repos = forShop(shopA.shopId);
+    const live = await repos.products.create(input({ title: "Live" }));
+    const gone = await repos.products.create(input({ title: "Gone", price: 500 }));
+    await repos.products.remove(gone.id);
+    const other = await forShop(shopB.shopId).products.create(input());
+    const ids = [live.id, gone.id, other.id];
+
+    const active = await inTransaction((tx) => repos.sales.lockProducts(tx, ids));
+    const all = await inTransaction((tx) =>
+      repos.sales.lockProducts(tx, ids, { includeArchived: true }),
+    );
+
+    expect(active.map((p) => p.id)).toEqual([live.id]);
+    expect(all.map((p) => p.id).sort()).toEqual([live.id, gone.id].sort());
+    expect(all.find((p) => p.id === gone.id)).toMatchObject({ title: "Gone", price: 500 });
+  });
+});
+
+describe("sales.createOnline input", () => {
+  it("rejects a sale with no items", async () => {
+    const { shopA } = await seedTwoShops();
+    const repos = forShop(shopA.shopId);
+
+    await expect(
+      inTransaction((tx) => repos.sales.createOnline(tx, { stripeSessionId: "cs_empty", items: [] })),
+    ).rejects.toThrow();
+    expect(await repos.sales.list()).toEqual([]);
+  });
+});
+
+describe("sales.list date range", () => {
+  it("returns only sales at or after since and before until", async () => {
+    const { shopA } = await seedTwoShops();
+    const repos = forShop(shopA.shopId);
+    const phone = await repos.products.create(input({ stockQty: 5 }));
+    await recordPosSale(shopA.shopId, [{ productId: phone.id, qty: 1 }]);
+    const [first] = await repos.sales.list();
+    await new Promise((r) => setTimeout(r, 20));
+    const boundary = new Date();
+    await new Promise((r) => setTimeout(r, 20));
+    await recordPosSale(shopA.shopId, [{ productId: phone.id, qty: 1 }]);
+
+    expect(await repos.sales.list({ since: boundary })).toHaveLength(1);
+    expect((await repos.sales.list({ until: boundary })).map((s) => s.id)).toEqual([first.id]);
+    expect(await repos.sales.list({ since: first.createdAt })).toHaveLength(2);
+    expect(await repos.sales.list({ since: boundary, until: boundary })).toEqual([]);
+    expect(await repos.sales.list({ since: new Date(Date.now() + 60_000) })).toEqual([]);
   });
 });
 

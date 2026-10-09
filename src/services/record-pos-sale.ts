@@ -18,13 +18,13 @@ class OutOfStock extends Error {
 export async function recordPosSale(
   shopId: string,
   lines: PosLine[],
-): Promise<Result<{ saleId: string }, { outOfStock: string[]; invalid?: string }>> {
+): Promise<Result<{ saleId: string; total: number }, { outOfStock: string[]; invalid?: string }>> {
   const merged = mergePosLines(lines);
   if (!merged.ok) return err({ outOfStock: [], invalid: merged.error });
   const sales = forShop(shopId).sales;
 
   try {
-    const saleId = await inTransaction(async (tx) => {
+    const saved = await inTransaction(async (tx) => {
       const products = new Map(
         (
           await sales.lockProducts(
@@ -49,9 +49,9 @@ export async function recordPosSale(
         });
       }
       if (short.length > 0) throw new OutOfStock(short);
-      return (await sales.createPos(tx, items)).saleId;
+      return sales.createPos(tx, items);
     });
-    return ok({ saleId });
+    return ok(saved);
   } catch (error) {
     if (error instanceof OutOfStock) return err({ outOfStock: error.productIds });
     throw error;

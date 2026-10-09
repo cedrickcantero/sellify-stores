@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import { db, type Tx } from "../db";
 import { product, sale, saleItem } from "../schema";
 
@@ -26,7 +26,14 @@ export type SaleWithItems = {
   items: SaleItem[];
 };
 
-export type SaleFilter = { channel?: SaleChannel; status?: SaleStatus };
+export type SaleFilter = {
+  channel?: SaleChannel;
+  status?: SaleStatus;
+  /** Only sales created at or after this moment. */
+  since?: Date;
+  /** Only sales created before this moment. */
+  until?: Date;
+};
 
 export type OnlineSaleInput = {
   stripeSessionId: string;
@@ -42,14 +49,24 @@ export type SalesRepo = {
    * `{ duplicate: true }`, so the caller must not decrement stock again.
    */
   createOnline(tx: Tx, input: OnlineSaleInput): Promise<{ saleId: string } | { duplicate: true }>;
-  /** Inserts a completed POS sale and its lines; the caller has already taken the stock. */
-  createPos(tx: Tx, items: SaleItem[]): Promise<{ saleId: string }>;
+  /**
+   * Inserts a completed POS sale and its lines; the caller has already taken
+   * the stock. Returns the saved total in cents.
+   */
+  createPos(tx: Tx, items: SaleItem[]): Promise<{ saleId: string; total: number }>;
   /**
    * Locks and returns the shop's active products among `ids` (title and
    * current price), so a sale is priced from the database and the price
-   * cannot change before the sale commits.
+   * cannot change before the sale commits. Rows are locked in id order, so
+   * two sales over the same products never deadlock. `includeArchived` also
+   * returns products archived since they were listed (a payment that
+   * finishes after a product is removed still needs its title and price).
    */
-  lockProducts(tx: Tx, ids: string[]): Promise<{ id: string; title: string; price: number }[]>;
+  lockProducts(
+    tx: Tx,
+    ids: string[],
+    options?: { includeArchived?: boolean },
+  ): Promise<{ id: string; title: string; price: number }[]>;
   /** Flags a sale of this shop as paid but not fulfilled. */
   markNeedsRefund(tx: Tx, saleId: string): Promise<void>;
 };
@@ -58,6 +75,12 @@ export type SalesRepo = {
  * Takes `qty` units out of stock with one guarded update: it succeeds only
  * when the product belongs to the shop, is not archived and has at least
  * `qty` left. False means nothing changed. Run it inside a transaction.
+ *
+ * Lock order: a caller that takes several products must first call
+ * `sales.lockProducts(tx, ids)` in the same transaction. That locks the rows
+ * in id order, so concurrent sales over the same products wait for each
+ * other instead of deadlocking. Calling this alone, in an arbitrary order,
+ * can deadlock.
  */
 export async function decrementStock(
   tx: Tx,
@@ -87,7 +110,8 @@ async function insertSale(
   channel: SaleChannel,
   items: SaleItem[],
   stripeSessionId?: string,
-): Promise<{ saleId: string } | null> {
+): Promise<{ saleId: string; total: number } | null> {
+  if (items.length === 0) throw new Error("A sale needs at least one item");
   const total = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
   const [row] = await tx
     .insert(sale)
@@ -104,7 +128,7 @@ async function insertSale(
       unitPriceSnapshot: item.unitPrice,
     })),
   );
-  return { saleId: row.id };
+  return { saleId: row.id, total };
 }
 
 export function salesRepo(shopId: string): SalesRepo {
@@ -118,6 +142,8 @@ export function salesRepo(shopId: string): SalesRepo {
             eq(sale.shopId, shopId),
             filter.channel ? eq(sale.channel, filter.channel) : undefined,
             filter.status ? eq(sale.status, filter.status) : undefined,
+            filter.since ? gte(sale.createdAt, filter.since) : undefined,
+            filter.until ? lt(sale.createdAt, filter.until) : undefined,
           ),
         )
         .orderBy(desc(sale.createdAt), sale.id)
@@ -152,7 +178,7 @@ export function salesRepo(shopId: string): SalesRepo {
 
     async createOnline(tx, input) {
       const created = await insertSale(tx, shopId, "online", input.items, input.stripeSessionId);
-      return created ?? { duplicate: true };
+      return created ? { saleId: created.saleId } : { duplicate: true };
     },
 
     async createPos(tx, items) {
@@ -161,13 +187,17 @@ export function salesRepo(shopId: string): SalesRepo {
       return created;
     },
 
-    async lockProducts(tx, ids) {
+    async lockProducts(tx, ids, options = {}) {
       if (ids.length === 0) return [];
       return tx
         .select({ id: product.id, title: product.title, price: product.price })
         .from(product)
         .where(
-          and(inArray(product.id, ids), eq(product.shopId, shopId), isNull(product.archivedAt)),
+          and(
+            inArray(product.id, ids),
+            eq(product.shopId, shopId),
+            options.includeArchived ? undefined : isNull(product.archivedAt),
+          ),
         )
         .orderBy(product.id)
         .for("update");

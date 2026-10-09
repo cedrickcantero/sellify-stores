@@ -7,7 +7,7 @@ import { recordPosSale } from "@/services/record-pos-sale";
 
 export type PosSaleState = {
   saleId?: string;
-  /** Sale total in cents, read back from the saved sale. */
+  /** Sale total in cents, as saved by the server. */
   total?: number;
   /** Ids of the products that were short; the sale was not recorded. */
   outOfStock?: string[];
@@ -32,5 +32,5 @@ export async function completePosSaleAction(input: unknown): Promise<PosSaleStat
   }
   revalidatePath("/pos");
   revalidatePath("/sales");
-  return { saleId: result.value.saleId };
+  return { saleId: result.value.saleId, total: result.value.total };
 }

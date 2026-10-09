@@ -32,16 +32,22 @@ export function PosRegister({ products }: { products: PosProduct[] }) {
     .map((p) => ({ product: p, qty: Number(quantities[p.id] || 0) }))
     .filter((l) => l.qty > 0);
   const total = lines.reduce((sum, l) => sum + l.qty * l.product.price, 0);
+  // Anything typed that is not a whole number (blank and 0 mean "not selling").
+  const invalid = products.filter((p) => {
+    const raw = (quantities[p.id] ?? "").trim();
+    return raw !== "" && !/^\d+$/.test(raw);
+  });
 
   function complete() {
     setMessage(undefined);
+    if (invalid.length > 0) return;
     startTransition(async () => {
       const result = await completePosSaleAction(
         lines.map((l) => ({ productId: l.product.id, qty: l.qty })),
       );
       if (result.saleId) {
         setQuantities({});
-        setMessage({ tone: "success", text: `Sale completed: ${formatCents(total)}.` });
+        setMessage({ tone: "success", text: `Sale completed: ${formatCents(result.total ?? 0)}.` });
       } else if (result.outOfStock) {
         const names = result.outOfStock
           .map((id) => products.find((p) => p.id === id)?.title ?? "A product")
@@ -59,6 +65,11 @@ export function PosRegister({ products }: { products: PosProduct[] }) {
   return (
     <div className="flex flex-col gap-6">
       {message ? <Alert tone={message.tone}>{message.text}</Alert> : null}
+      {invalid.length > 0 ? (
+        <Alert tone="warning">
+          Enter a whole number of 1 or more for {invalid.map((p) => p.title).join(", ")}.
+        </Alert>
+      ) : null}
       <Table caption="Products in stock">
         <TableHeader>
           <TableRow>
@@ -106,7 +117,7 @@ export function PosRegister({ products }: { products: PosProduct[] }) {
         }
         actions={<span className="text-section font-heading">{formatCents(total)}</span>}
         footer={
-          <Button disabled={lines.length === 0 || pending} onClick={complete}>
+          <Button disabled={lines.length === 0 || invalid.length > 0 || pending} onClick={complete}>
             {pending ? "Completing sale" : "Complete sale"}
           </Button>
         }

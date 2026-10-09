@@ -50,5 +50,6 @@ export const saleItem = pgTable(
   (table) => [
     check("sale_item_quantity_positive", sql`${table.quantity} > 0`),
     index("sale_item_sale_id_idx").on(table.saleId),
+    index("sale_item_product_id_idx").on(table.productId),
   ],
 );
