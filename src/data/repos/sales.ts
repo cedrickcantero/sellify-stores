@@ -43,6 +43,8 @@ export type OnlineSaleInput = {
 export type SalesRepo = {
   /** The shop's newest sales (at most 200), newest first. */
   list(filter?: SaleFilter): Promise<SaleWithItems[]>;
+  /** How many sales and their summed totals (cents) match the filter, with no limit. */
+  totals(filter?: SaleFilter): Promise<{ count: number; total: number }>;
   /**
    * Inserts a completed online sale and its lines, priced from `items`. A
    * second call with the same Stripe session id changes nothing and returns
@@ -131,21 +133,34 @@ async function insertSale(
   return { saleId: row.id, total };
 }
 
+function salesWhere(shopId: string, filter: SaleFilter) {
+  return and(
+    eq(sale.shopId, shopId),
+    filter.channel ? eq(sale.channel, filter.channel) : undefined,
+    filter.status ? eq(sale.status, filter.status) : undefined,
+    filter.since ? gte(sale.createdAt, filter.since) : undefined,
+    filter.until ? lt(sale.createdAt, filter.until) : undefined,
+  );
+}
+
 export function salesRepo(shopId: string): SalesRepo {
   return {
+    async totals(filter = {}) {
+      const [row] = await db
+        .select({
+          count: sql<number>`count(*)::int`,
+          total: sql<number>`coalesce(sum(${sale.total}), 0)::int`,
+        })
+        .from(sale)
+        .where(salesWhere(shopId, filter));
+      return { count: row.count, total: row.total };
+    },
+
     async list(filter = {}) {
       const rows = await db
         .select()
         .from(sale)
-        .where(
-          and(
-            eq(sale.shopId, shopId),
-            filter.channel ? eq(sale.channel, filter.channel) : undefined,
-            filter.status ? eq(sale.status, filter.status) : undefined,
-            filter.since ? gte(sale.createdAt, filter.since) : undefined,
-            filter.until ? lt(sale.createdAt, filter.until) : undefined,
-          ),
-        )
+        .where(salesWhere(shopId, filter))
         .orderBy(desc(sale.createdAt), sale.id)
         .limit(LIST_LIMIT);
       if (rows.length === 0) return [];
