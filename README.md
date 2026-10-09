@@ -4,6 +4,10 @@ Sellify Stores: storefront builder trial. One Next.js app with two surfaces: the
 authenticated Sellify backend for shop owners, and public online stores that
 read each shop's live Sellify data.
 
+Live demo store: https://sellify-stores.vercel.app/s/fixit-galway. What works,
+what does not yet, and what comes next (including photo credits for the demo
+store): `NOTES.md`. Brand guidelines: `docs/brand/`.
+
 ## Stack
 
 Next.js (App Router, TypeScript, Tailwind), pnpm, Drizzle ORM on Neon Postgres
