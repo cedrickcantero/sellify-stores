@@ -72,3 +72,22 @@ describe("store home", () => {
     expect(html).not.toMatch(/#[0-9a-fA-F]{3,6}\b/);
   });
 });
+
+describe("preview links", () => {
+  const c = () => config();
+  it("keeps ?preview on internal links when rendered as a preview", () => {
+    const html = renderToStaticMarkup(
+      <StoreShell config={c()} basePath="/s/fixit" preview>
+        <StoreHome config={c()} basePath="/s/fixit" preview />
+      </StoreShell>,
+    );
+    const hrefs = [...html.matchAll(/href="(\/s\/fixit[^"]*)"/g)].map((m) => m[1]);
+    expect(hrefs.length).toBeGreaterThan(3);
+    expect(hrefs.every((h) => h.endsWith("?preview"))).toBe(true);
+  });
+
+  it("adds nothing to links of the published store", () => {
+    const html = shell(c()) + home(c());
+    expect(html).not.toContain("?preview");
+  });
+});

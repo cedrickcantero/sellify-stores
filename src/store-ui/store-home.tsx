@@ -42,7 +42,15 @@ function OpeningHours({ hours }: { hours: StoreConfig["openingHours"] }) {
 // Store home page: the store name, a card for each enabled tab, the about
 // text and the opening hours. Everything comes from the published config
 // (or the draft in a preview) and is styled with var(--store-*) only.
-export function StoreHome({ config, basePath }: { config: StoreConfig; basePath: string }) {
+export function StoreHome({
+  config,
+  basePath,
+  preview = false,
+}: {
+  config: StoreConfig;
+  basePath: string;
+  preview?: boolean;
+}) {
   const tabs = STORE_TABS.filter((tab) => config.tabs[tab.key]);
   const about = config.content.about.trim();
 
@@ -54,7 +62,7 @@ export function StoreHome({ config, basePath }: { config: StoreConfig; basePath:
           {tabs.map((tab) => (
             <li key={tab.key}>
               <Link
-                href={storeHref(basePath, tab.path)}
+                href={storeHref(basePath, tab.path, preview)}
                 className="flex h-full flex-col gap-2 rounded-(--store-radius) border border-(--store-text)/15 p-6 hover:border-(--store-primary)"
               >
                 <span className="font-(family-name:--store-font-heading) text-xl font-bold text-(--store-primary)">

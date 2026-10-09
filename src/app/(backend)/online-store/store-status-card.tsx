@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useOptimistic, useState, useTransition } from "react";
+import { useOptimistic, useState, useTransition } from "react";
+import type { FormEvent } from "react";
 import { Alert, Button, Card, StatusBadge, Switch } from "@/ui";
 import { publishStoreAction, setStoreOnlineAction, type StoreFormState } from "./actions";
 
@@ -11,17 +12,49 @@ export function StoreStatusCard({
   published,
   online,
   unpublishedChanges,
+  flush,
+  onPublished,
 }: {
   address: string;
   previewUrl: string;
   unpublishedChanges: boolean;
+  /** Sends any edits still waiting to be autosaved; resolves when done. */
+  flush: () => Promise<void>;
+  /** Called after a successful publish. */
+  onPublished: () => void;
   published: boolean;
   online: boolean;
 }) {
-  const [state, publish, publishing] = useActionState<StoreFormState>(publishStoreAction, {});
+  const [state, setState] = useState<StoreFormState>({});
+  const [publishing, setPublishing] = useState(false);
   const [optimisticOnline, setOptimisticOnline] = useOptimistic(online);
   const [, startTransition] = useTransition();
   const live = published && optimisticOnline;
+
+  // The last edit is saved first, so what is published includes it.
+  async function publish(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPublishing(true);
+    try {
+      await flush();
+      const result = await publishStoreAction();
+      setState(result);
+      if (!result.error) onPublished();
+    } catch {
+      setState({ error: "Could not publish. Check your connection and try again." });
+    } finally {
+      setPublishing(false);
+    }
+  }
+
+  // Open the tab straight away (a popup after an await can be blocked), then
+  // point it at the preview once the last edit is saved.
+  async function preview() {
+    const tab = window.open("about:blank", "_blank");
+    await flush();
+    if (tab) tab.location.href = previewUrl;
+    else window.location.assign(previewUrl);
+  }
 
   const [toggleError, setToggleError] = useState<string | null>(null);
 
@@ -52,12 +85,10 @@ export function StoreStatusCard({
       }
       footer={
         <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-          <Button asChild variant="secondary" className="w-full sm:w-auto">
-            <a href={previewUrl} target="_blank" rel="noreferrer">
-              Preview draft
-            </a>
+          <Button type="button" variant="secondary" onClick={preview} className="w-full sm:w-auto">
+            Preview draft
           </Button>
-          <form action={publish}>
+          <form onSubmit={publish}>
             <Button type="submit" disabled={publishing} className="w-full sm:w-auto">
               {publishing ? "Publishing..." : "Publish store"}
             </Button>

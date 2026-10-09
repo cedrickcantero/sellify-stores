@@ -94,4 +94,86 @@ describe("useAutosave", () => {
     await act(async () => void (await vi.advanceTimersByTimeAsync(DELAY)));
     expect(result.current.status).toBe("saved");
   });
+
+  it("clears the unpublished flag when told the store was published, with no prop change", async () => {
+    const save = vi.fn(async () => ({ ok: true, unpublishedChanges: true }) as SaveDraftResult);
+    const { result } = setup(save);
+    expect(result.current.unpublishedChanges).toBe(false);
+
+    act(() => result.current.queue("about", { content: { about: "Hi" } }));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(DELAY)));
+    expect(result.current.unpublishedChanges).toBe(true);
+
+    act(() => result.current.markPublished());
+    expect(result.current.unpublishedChanges).toBe(false);
+
+    act(() => result.current.queue("about", { content: { about: "Hi again" } }));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(DELAY)));
+    expect(result.current.unpublishedChanges).toBe(true);
+  });
+
+  it("keeps an invalid field's error when another field of the section saves, and never says saved", async () => {
+    const save = vi
+      .fn<(patch: unknown) => Promise<SaveDraftResult>>()
+      .mockResolvedValueOnce({ ok: false, errors: { "brand.colors.primary": "Enter a colour like #0F766E." } })
+      .mockResolvedValueOnce({ ok: true, unpublishedChanges: true });
+    const { result } = setup(save);
+
+    act(() => result.current.queue("brand", { brand: { colors: { primary: "#12" } } }));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(DELAY)));
+    act(() => result.current.queue("brand", { brand: { colors: { accent: "#00ff00" } } }));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(DELAY)));
+
+    expect(save).toHaveBeenLastCalledWith({ brand: { colors: { accent: "#00ff00" } } });
+    expect(result.current.errors).toEqual({ "brand.colors.primary": "Enter a colour like #0F766E." });
+    expect(result.current.status).toBe("error");
+  });
+
+  it("clears an error once its own field saves", async () => {
+    const save = vi
+      .fn<(patch: unknown) => Promise<SaveDraftResult>>()
+      .mockResolvedValueOnce({ ok: false, errors: { "brand.colors.primary": "Enter a colour like #0F766E." } })
+      .mockResolvedValue({ ok: true, unpublishedChanges: true });
+    const { result } = setup(save);
+
+    act(() => result.current.queue("brand", { brand: { colors: { primary: "#12" } } }));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(DELAY)));
+    act(() => result.current.queue("brand", { brand: { colors: { accent: "#00ff00" } } }));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(DELAY)));
+    act(() => result.current.queue("brand", { brand: { colors: { primary: "#112233" } } }));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(DELAY)));
+    expect(result.current.errors).toEqual({});
+    expect(result.current.status).toBe("saved");
+  });
+
+  it("resends a patch lost to a network failure together with the next edit", async () => {
+    const save = vi
+      .fn<(patch: unknown) => Promise<SaveDraftResult>>()
+      .mockRejectedValueOnce(new Error("network"))
+      .mockResolvedValue({ ok: true, unpublishedChanges: true });
+    const { result } = setup(save);
+
+    act(() => result.current.queue("brand", { brand: { colors: { primary: "#112233" } } }));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(DELAY)));
+    expect(result.current.status).toBe("error");
+
+    act(() => result.current.queue("brand", { brand: { colors: { accent: "#00ff00" } } }));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(DELAY)));
+    expect(save).toHaveBeenLastCalledWith({ brand: { colors: { primary: "#112233", accent: "#00ff00" } } });
+    expect(result.current.errors).toEqual({});
+    expect(result.current.status).toBe("saved");
+  });
+
+  it("flush sends waiting edits at once and resolves after they are saved", async () => {
+    const save = vi.fn(async () => ({ ok: true, unpublishedChanges: true }) as SaveDraftResult);
+    const { result } = setup(save);
+
+    act(() => result.current.queue("about", { content: { about: "Last edit" } }));
+    await act(async () => void (await result.current.flush()));
+    expect(save).toHaveBeenCalledWith({ content: { about: "Last edit" } });
+    expect(result.current.status).toBe("saved");
+
+    await act(async () => void (await vi.advanceTimersByTimeAsync(DELAY)));
+    expect(save).toHaveBeenCalledTimes(1);
+  });
 });

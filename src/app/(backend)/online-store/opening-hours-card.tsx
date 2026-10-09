@@ -43,7 +43,6 @@ export function OpeningHoursCard({ draft, errors, queue }: EditorSection) {
       <ul className="flex flex-col divide-y divide-border">
         {WEEKDAYS.map((day) => {
           const state = days[day];
-          const timeError = errors[`openingHours.${day}.close`] ?? errors[`openingHours.${day}.open`];
           return (
             <li key={day} className="flex flex-col gap-3 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:gap-6">
               <div className="sm:w-44 sm:pt-2">
@@ -55,7 +54,7 @@ export function OpeningHoursCard({ draft, errors, queue }: EditorSection) {
                 />
               </div>
               <div className="grid flex-1 grid-cols-2 gap-3">
-                <Field label={`${DAY_NAMES[day]} opens`} error={timeError ? undefined : errors[`openingHours.${day}.open`]}>
+                <Field label={`${DAY_NAMES[day]} opens`} error={errors[`openingHours.${day}.open`]}>
                   <Input
                     type="time"
                     value={state.open}

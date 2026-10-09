@@ -11,7 +11,7 @@ function Harness({ initial = "#1f2937", error }: { initial?: string; error?: str
   return (
     <>
       <Field label="Primary colour" error={error}>
-        <ColorInput value={value} onChange={setValue} />
+        <ColorInput label="Primary colour" value={value} onChange={setValue} />
       </Field>
       <output data-testid="value">{value}</output>
     </>
@@ -37,7 +37,7 @@ describe("ColorInput", () => {
 
   it("changes the value when a colour is picked", () => {
     render(<Harness />);
-    fireEvent.change(screen.getByLabelText("Pick a colour"), { target: { value: "#0f766e" } });
+    fireEvent.change(screen.getByLabelText("Primary colour picker"), { target: { value: "#0f766e" } });
     expect(screen.getByTestId("value")).toHaveTextContent("#0f766e");
   });
 
@@ -46,6 +46,6 @@ describe("ColorInput", () => {
     const hex = screen.getByRole("textbox", { name: "Primary colour" });
     await userEvent.clear(hex);
     await userEvent.type(hex, "teal");
-    expect(screen.getByLabelText("Pick a colour")).toHaveValue("#1f2937");
+    expect(screen.getByLabelText("Primary colour picker")).toHaveValue("#1f2937");
   });
 });

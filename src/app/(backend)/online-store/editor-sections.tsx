@@ -35,6 +35,7 @@ export function BrandCard({ draft, errors, queue }: EditorSection) {
         {COLOR_FIELDS.map(({ key, label, hint }) => (
           <Field key={key} label={label} hint={hint} error={errors[`brand.colors.${key}`]}>
             <ColorInput
+              label={label}
               value={colors[key]}
               onChange={(value) => {
                 setColors((all) => ({ ...all, [key]: value }));

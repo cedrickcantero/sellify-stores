@@ -11,8 +11,12 @@ export const STORE_TABS: StoreTab[] = [
   { key: "sell", label: "Sell", path: "/sell" },
 ];
 
-export function storeHref(basePath: string, path: string): string {
-  return `${basePath}${path}` || "/";
+// Internal store links. In a preview they keep ?preview so the next page is
+// also asked for as a preview; the server alone decides whether that shows
+// the draft (members only), so the flag grants nothing.
+export function storeHref(basePath: string, path: string, preview = false): string {
+  const href = `${basePath}${path}` || "/";
+  return preview ? `${href}?preview` : href;
 }
 
 function StoreLogo({ brand }: { brand: StoreConfig["brand"] }) {
@@ -61,7 +65,7 @@ export function StoreShell({
       ) : null}
       <header className="border-b border-(--store-text)/15">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
-          <Link href={storeHref(basePath, "/")} className="flex min-w-0 items-center gap-3">
+          <Link href={storeHref(basePath, "/", preview)} className="flex min-w-0 items-center gap-3">
             <StoreLogo brand={brand} />
             <span className="truncate font-(family-name:--store-font-heading) text-xl font-bold">{brand.name}</span>
           </Link>
@@ -71,7 +75,7 @@ export function StoreShell({
                 {tabs.map((tab) => (
                   <li key={tab.key}>
                     <Link
-                      href={storeHref(basePath, tab.path)}
+                      href={storeHref(basePath, tab.path, preview)}
                       className="inline-flex h-10 items-center rounded-(--store-radius) px-4 font-semibold hover:bg-(--store-primary) hover:text-(--store-on-primary)"
                     >
                       {tab.label}

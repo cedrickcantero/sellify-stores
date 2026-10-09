@@ -16,6 +16,10 @@ const STATUS_TEXT = {
   error: "Some changes were not saved. Fix the highlighted fields.",
 } as const;
 
+function fieldErrorCount(errors: Record<string, string>): number {
+  return Object.keys(errors).filter((key) => key !== "config").length;
+}
+
 // The whole Online Store page: status and publish on top, then one card per
 // part of the store. Every edit goes to the draft after a short pause.
 export function StoreEditor({
@@ -33,7 +37,7 @@ export function StoreEditor({
   online: boolean;
   unpublishedChanges: boolean;
 }) {
-  const { queue, status, errors, unpublishedChanges } = useAutosave({
+  const { queue, flush, markPublished, status, errors, unpublishedChanges } = useAutosave({
     save: saveDraftAction,
     unpublishedChanges: initialUnpublished,
   });
@@ -47,9 +51,11 @@ export function StoreEditor({
         published={published}
         online={online}
         unpublishedChanges={unpublishedChanges}
+        flush={flush}
+        onPublished={markPublished}
       />
       <p role="status" aria-live="polite" className="min-h-5 text-small text-muted-foreground">
-        {STATUS_TEXT[status]}
+        {status === "error" && fieldErrorCount(errors) === 0 ? errors.config : STATUS_TEXT[status]}
       </p>
       {errors.config ? <Alert tone="error">{errors.config}</Alert> : null}
       <StoreDetailsForm name={draft.brand.name} logoUrl={draft.brand.logoUrl} />

@@ -6,7 +6,8 @@ import { Input } from "./input";
 
 const FULL_HEX = /^#[0-9a-fA-F]{6}$/;
 // A colour picker always needs some value; this is data, not a styling colour.
-const NO_COLOUR = `#${"0".repeat(6)}`;
+// eslint-disable-next-line no-restricted-syntax -- initial value of a native colour input, not a style
+const NO_COLOUR = "#000000";
 
 /**
  * A colour as a picker plus its hex code, for brand colours. Controlled:
@@ -17,9 +18,12 @@ const NO_COLOUR = `#${"0".repeat(6)}`;
 export function ColorInput({
   value,
   onChange,
+  label = "colour",
   className,
   ...props
 }: {
+  /** Names the picker for screen readers: "<label> picker". Pass the Field's label. */
+  label?: string;
   value: string;
   onChange: (value: string) => void;
   className?: string;
@@ -38,7 +42,7 @@ export function ColorInput({
     <div className={cn("flex items-center gap-2", className)}>
       <Input
         type="color"
-        aria-label="Pick a colour"
+        aria-label={`${label} picker`}
         value={picked}
         onChange={(event) => onChange(event.target.value)}
         disabled={props.disabled}
