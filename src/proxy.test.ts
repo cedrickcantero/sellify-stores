@@ -48,6 +48,13 @@ describe("proxy", () => {
     expect(response.headers.get("x-middleware-request-x-sellify-store-preview")).toBe("1");
   });
 
+  it("flags the order confirmation page for the store layout, and drops a forged flag elsewhere", () => {
+    const header = "x-middleware-request-x-sellify-order-page";
+    expect(proxy(request("https://sellify.example.com/s/fixit-galway/checkout/success?session_id=cs_test_1")).headers.get(header)).toBe("1");
+    expect(proxy(request("https://fixit-galway.stores.example.com/checkout/success")).headers.get(header)).toBe("1");
+    expect(proxy(request("https://sellify.example.com/s/fixit-galway/shop", { "x-sellify-order-page": "1" })).headers.get(header)).toBeNull();
+  });
+
   it("drops a preview flag the browser sent itself", () => {
     const response = proxy(
       request("https://sellify.example.com/s/fixit-galway", { "x-sellify-store-preview": "1" }),

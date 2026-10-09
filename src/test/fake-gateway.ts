@@ -25,7 +25,7 @@ export function createFakeGateway(): FakeGateway {
     sessions,
     async createSession(input) {
       created.push(input);
-      const id = `cs_test_fake_${created.length}`;
+      const id = `cs_test_fake${created.length}`;
       sessions.set(id, {
         id,
         metadata: input.metadata,

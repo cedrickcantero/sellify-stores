@@ -65,6 +65,37 @@ describe("getOrderStatus", () => {
     expect(await getOrderStatus(shopB.shopId, session.id, { gateway })).toEqual({ state: "unknown" });
   });
 
+  it.each(["cs_test_", "cs_live_a/b", "../x", "cs_prod_abc", "cs_test_abc def", "x".repeat(40), "cs_test_a_b"])(
+    "is unknown for the malformed id %j without calling Stripe",
+    async (id) => {
+      const { shopA } = await setup();
+      const never = createFakeGateway();
+      never.retrieveSession = async () => {
+        throw new Error("should not be called");
+      };
+      expect(await getOrderStatus(shopA.shopId, id, { gateway: never })).toEqual({ state: "unknown" });
+    },
+  );
+
+  it("stops asking Stripe once an IP has used its lookups, and says confirming instead", async () => {
+    const { shopA, session, gateway } = await setup();
+    let calls = 0;
+    const counting = { ...gateway, retrieveSession: async (id: string) => (calls++, gateway.retrieveSession(id)) };
+    const deps = { gateway: counting, ip: "203.0.113.7", lookupLimit: { capacity: 3, refillPerMinute: 0 } };
+
+    const answers = [];
+    for (let i = 0; i < 5; i++) answers.push(await getOrderStatus(shopA.shopId, session.id, deps));
+    expect(answers.every((a) => a.state === "pending")).toBe(true);
+    expect(calls).toBe(3);
+
+    // Another IP still gets through; a recorded order never needs a lookup.
+    await getOrderStatus(shopA.shopId, session.id, { ...deps, ip: "203.0.113.8" });
+    expect(calls).toBe(4);
+    await fulfilOrder(session, { mailer: createFakeMailer() });
+    expect(await getOrderStatus(shopA.shopId, session.id, deps)).toMatchObject({ state: "confirmed" });
+    expect(calls).toBe(4);
+  });
+
   it("is unknown without a session id", async () => {
     const { shopA, gateway } = await setup();
     expect(await getOrderStatus(shopA.shopId, undefined, { gateway })).toEqual({ state: "unknown" });

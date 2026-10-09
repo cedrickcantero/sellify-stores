@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { classifyRequest, hostEnv, pathSlug, PREVIEW_HEADER, STORE_HOST_SEGMENT } from "@/domain/store-host";
+import { classifyRequest, hostEnv, ORDER_PAGE_HEADER, pathSlug, PREVIEW_HEADER, STORE_HOST_SEGMENT } from "@/domain/store-host";
 
 // Host to path routing only; no database access here. Store pages live
 // under /s/[slug]. A request on a store host (a subdomain of
@@ -23,6 +23,9 @@ export function proxy(request: NextRequest): NextResponse {
   const headers = new Headers(request.headers);
   headers.delete(PREVIEW_HEADER);
   if (preview) headers.set(PREVIEW_HEADER, "1");
+  // Same for the order confirmation page: only the proxy may say it is one.
+  headers.delete(ORDER_PAGE_HEADER);
+  if (target.kind !== "app" && /\/checkout\/success\/?$/.test(pathname)) headers.set(ORDER_PAGE_HEADER, "1");
 
   let response: NextResponse;
   if ((target.kind === "subdomain" || target.kind === "domain") && pathSlug(pathname) !== STORE_HOST_SEGMENT) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyRequest, storeAddress, STORE_HOST_SEGMENT } from "./store-host";
+import { classifyRequest, configuredAppOrigin, storeAddress, STORE_HOST_SEGMENT } from "./store-host";
 
 const env = { appHost: "sellify.example.com", storeRootDomain: "stores.example.com" };
 
@@ -96,5 +96,23 @@ describe("storeAddress", () => {
     expect(storeAddress("fixit-galway", { origin: "http://localhost:3000" })).toBe(
       "http://localhost:3000/s/fixit-galway",
     );
+  });
+});
+
+describe("configuredAppOrigin", () => {
+  it("prefers BETTER_AUTH_URL, without a trailing slash or path", () => {
+    expect(configuredAppOrigin({ appUrl: "https://app.example.com/", appHost: "other.example.com" })).toBe(
+      "https://app.example.com",
+    );
+  });
+
+  it("builds the origin from APP_HOST, http only for local hosts", () => {
+    expect(configuredAppOrigin({ appHost: "sellify.example.com" })).toBe("https://sellify.example.com");
+    expect(configuredAppOrigin({ appHost: "localhost:3000" })).toBe("http://localhost:3000");
+  });
+
+  it("is null when neither is configured or the URL is not http(s)", () => {
+    expect(configuredAppOrigin({})).toBeNull();
+    expect(configuredAppOrigin({ appUrl: "javascript:alert(1)" })).toBeNull();
   });
 });

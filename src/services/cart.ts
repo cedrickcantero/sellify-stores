@@ -51,3 +51,26 @@ export async function writeCart(shopId: string, lines: CartLine[]): Promise<void
     maxAge: 60 * 60 * 24 * 30,
   });
 }
+
+// Marks the order whose confirmation emptied the basket, so reopening that
+// confirmation later never wipes a newer basket.
+function orderMarkerName(shopId: string): string {
+  return `order_${shopId}`;
+}
+
+// Empties the basket the first time a confirmed order's page is viewed.
+// False when this order already emptied it. Server actions only.
+export async function clearBasketForOrder(shopId: string, sessionId: string): Promise<boolean> {
+  const store = await cookies();
+  const marker = orderMarkerName(shopId);
+  if (store.get(marker)?.value === sessionId) return false;
+  await writeCart(shopId, []);
+  store.set(marker, sessionId, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 30,
+  });
+  return true;
+}

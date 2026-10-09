@@ -3,10 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { basketIdSchema, parseQtyInput, setLineQty } from "@/domain/cart";
-import { readBuyableCart, writeCart } from "@/services/cart";
+import { forShop } from "@/data";
+import { clearBasketForOrder, readBuyableCart, writeCart } from "@/services/cart";
 import { getStoreProduct } from "@/services/store-products";
 import { storeHref } from "@/store-ui/store-href";
-import { requireLiveStore } from "./store-context";
+import { loadStore, requireLiveStore } from "./store-context";
+
+const ORDER_SESSION_ID = /^cs_(test|live)_[A-Za-z0-9]{1,200}$/;
 
 // Basket actions. Each takes the slug (bound by the page), re-resolves the
 // shop on the server and reads prices and stock from the database; the
@@ -84,9 +87,13 @@ export async function removeFromBasket(slug: string, productId: string): Promise
   );
 }
 
-// Empties this shop's basket after an order is confirmed.
-export async function clearBasket(slug: string): Promise<void> {
-  if (!basketIdSchema.safeParse(slug).success) return;
-  const { shopId } = await requireLiveStore(slug, "shop");
-  await writeCart(shopId, []);
+// Empties this shop's basket the first time a confirmed order is shown. It
+// works only for an order this shop has recorded, and only once per order.
+export async function clearBasket(slug: string, sessionId: string): Promise<void> {
+  if (!basketIdSchema.safeParse(slug).success || !ORDER_SESSION_ID.test(sessionId)) return;
+  // Not requireLiveStore: the confirmation still shows if the store went offline.
+  const store = await loadStore(slug);
+  if (!store) return;
+  if (!(await forShop(store.shopId).sales.findByStripeSession(sessionId))) return;
+  await clearBasketForOrder(store.shopId, sessionId);
 }

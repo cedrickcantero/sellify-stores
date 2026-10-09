@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createFakeGateway } from "@/test/fake-gateway";
 
 // The request boundary: cookies, headers and the store resolved to the shop
@@ -14,9 +14,14 @@ vi.mock("next/headers", () => ({
   headers: async () => requestHeaders,
 }));
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
-const current = { shopId: "", preview: false };
+const current = { shopId: "", preview: false, basePath: "/s/test" };
 vi.mock("../store-context", () => ({
-  requireLiveStore: async () => ({ shopId: current.shopId, basePath: "/s/test", preview: current.preview }),
+  requireLiveStore: async () => ({
+    shopId: current.shopId,
+    slug: "test",
+    basePath: current.basePath,
+    preview: current.preview,
+  }),
 }));
 // A basket read that is already out of date when checkout runs (stock went
 // between that read and the payment session), to reach the second check.
@@ -71,7 +76,13 @@ beforeEach(() => {
   requestHeaders.set("x-forwarded-proto", "https");
   requestHeaders.set("x-real-ip", `10.0.0.${Math.floor(Math.random() * 250)}`);
   current.preview = false;
+  current.basePath = "/s/test";
+  vi.stubEnv("BETTER_AUTH_URL", "https://app.example.test");
+  vi.stubEnv("APP_HOST", "app.example.test");
+  vi.stubEnv("STORE_ROOT_DOMAIN", "");
 });
+
+afterEach(() => vi.unstubAllEnvs());
 
 async function setup(stock = 3) {
   const { shopA, shopB } = await seedTwoShops();
@@ -87,9 +98,9 @@ describe("startCheckout", () => {
     const { redirectTo } = await run(startCheckout("test", {}, new FormData()));
     expect(redirectTo).toMatch(/^https:\/\/checkout\.example\.test\//);
     expect(gateway.created[0].successUrl).toBe(
-      "https://shop.example.test/s/test/checkout/success?session_id={CHECKOUT_SESSION_ID}",
+      "https://app.example.test/s/test/checkout/success?session_id={CHECKOUT_SESSION_ID}",
     );
-    expect(gateway.created[0].cancelUrl).toBe("https://shop.example.test/s/test/basket");
+    expect(gateway.created[0].cancelUrl).toBe("https://app.example.test/s/test/basket");
   });
 
   it("keeps ?preview on the return addresses in a preview", async () => {
@@ -97,9 +108,50 @@ describe("startCheckout", () => {
     current.preview = true;
     await run(startCheckout("test", {}, new FormData()));
     expect(gateway.created[0].successUrl).toBe(
-      "https://shop.example.test/s/test/checkout/success?preview&session_id={CHECKOUT_SESSION_ID}",
+      "https://app.example.test/s/test/checkout/success?preview&session_id={CHECKOUT_SESSION_ID}",
     );
-    expect(gateway.created[0].cancelUrl).toBe("https://shop.example.test/s/test/basket?preview");
+    expect(gateway.created[0].cancelUrl).toBe("https://app.example.test/s/test/basket?preview");
+  });
+
+  it("ignores a forged Host and X-Forwarded-Proto: the return addresses come from configuration", async () => {
+    await setup();
+    requestHeaders.set("host", "evil.example");
+    requestHeaders.set("x-forwarded-proto", "javascript");
+    requestHeaders.set("x-forwarded-host", "evil.example");
+    await run(startCheckout("test", {}, new FormData()));
+    for (const url of [gateway.created[0].successUrl, gateway.created[0].cancelUrl]) {
+      expect(url.startsWith("https://app.example.test/s/test/")).toBe(true);
+      expect(url).not.toContain("evil");
+    }
+  });
+
+  it("sends a customer who arrived on the store's subdomain back to that subdomain", async () => {
+    await setup();
+    vi.stubEnv("STORE_ROOT_DOMAIN", "stores.example.test");
+    current.basePath = "";
+    requestHeaders.set("host", "test.stores.example.test");
+    await run(startCheckout("test", {}, new FormData()));
+    expect(gateway.created[0].successUrl).toBe(
+      "https://test.stores.example.test/checkout/success?session_id={CHECKOUT_SESSION_ID}",
+    );
+    expect(gateway.created[0].cancelUrl).toBe("https://test.stores.example.test/basket");
+  });
+
+  it("uses the stored hostname of a verified custom domain, and ignores a host that is not one", async () => {
+    const { shopA } = await setup();
+    await forShop(shopA.shopId).customDomains.add({ hostname: "fixitgalway.ie", status: "verified" });
+    current.basePath = "";
+    requestHeaders.set("host", "FixItGalway.ie:443");
+    await run(startCheckout("test", {}, new FormData()));
+    expect(gateway.created[0].successUrl).toBe(
+      "https://fixitgalway.ie/checkout/success?session_id={CHECKOUT_SESSION_ID}",
+    );
+
+    requestHeaders.set("host", "evil.example");
+    await run(startCheckout("test", {}, new FormData()));
+    expect(gateway.created[1].successUrl).toBe(
+      "https://app.example.test/s/test/checkout/success?session_id={CHECKOUT_SESSION_ID}",
+    );
   });
 
   it("tells the customer when stock dropped: the basket is updated and no session is created", async () => {

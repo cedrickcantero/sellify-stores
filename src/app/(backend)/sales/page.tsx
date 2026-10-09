@@ -3,7 +3,6 @@ import { getActiveShop } from "@/auth/session";
 import { forShop, type SaleFilter } from "@/data";
 import { formatCents } from "@/domain/product";
 import {
-  Alert,
   FilterBar,
   PageHeader,
   Pill,
@@ -58,11 +57,7 @@ function readFilter(params: Record<string, string | string[] | undefined>): Sale
 export default async function SalesPage({ searchParams }: PageProps<"/sales">) {
   const { shopId, shop } = await getActiveShop();
   const filter = readFilter(await searchParams);
-  const repos = forShop(shopId);
-  const [sales, refunds] = await Promise.all([
-    repos.sales.list(filter),
-    repos.sales.totals({ status: "needs_refund" }),
-  ]);
+  const sales = await forShop(shopId).sales.list(filter);
   const format = new Intl.DateTimeFormat("en-IE", {
     dateStyle: "medium",
     timeStyle: "short",
@@ -76,14 +71,6 @@ export default async function SalesPage({ searchParams }: PageProps<"/sales">) {
         title="Sales"
         description="Every POS and online sale, with its channel and status."
       />
-      {refunds.count > 0 ? (
-        <Alert tone="error">
-          {refunds.count === 1
-            ? "1 online order was paid but an item ran out, so it needs a refund."
-            : `${refunds.count} online orders were paid but an item ran out, so they need a refund.`}{" "}
-          Refund them in your Stripe dashboard, then contact the customer.
-        </Alert>
-      ) : null}
       <FilterBar filters={filters} />
       <Table caption="Sales">
         <TableHeader>
@@ -110,7 +97,9 @@ export default async function SalesPage({ searchParams }: PageProps<"/sales">) {
                   <Pill>{CHANNEL_LABELS[sale.channel]}</Pill>
                 </TableCell>
                 <TableCell>
-                  {sale.items.map((item) => `${item.quantity} x ${item.title}`).join(", ")}
+                  {sale.items.length > 0
+                    ? sale.items.map((item) => `${item.quantity} x ${item.title}`).join(", ")
+                    : "Items not recorded. Check the payment in Stripe."}
                 </TableCell>
                 <TableCell align="right">{formatCents(sale.total)}</TableCell>
                 <TableCell>

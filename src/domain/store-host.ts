@@ -25,6 +25,10 @@ export const STORE_HOST_SEGMENT = "_host";
 // Request header the proxy sets on store requests that ask for a preview.
 export const PREVIEW_HEADER = "x-sellify-store-preview";
 
+// Request header the proxy sets on the order confirmation page, so the store
+// layout can show it even when the store has since been switched offline.
+export const ORDER_PAGE_HEADER = "x-sellify-order-page";
+
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
@@ -70,6 +74,25 @@ export function classifyRequest(host: string, pathname: string, env: HostEnv): R
 export function storeAddress(slug: string, opts: { storeRootDomain?: string; origin: string }): string {
   if (opts.storeRootDomain) return `https://${slug}.${hostnameOf(opts.storeRootDomain)}`;
   return `${opts.origin.replace(/\/$/, "")}/s/${slug}`;
+}
+
+// The app's own public origin from configuration (never from a request):
+// BETTER_AUTH_URL when it is an http(s) URL, otherwise APP_HOST (http for a
+// local host, https elsewhere). Null when neither is usable.
+export function configuredAppOrigin(env: { appUrl?: string; appHost?: string }): string | null {
+  if (env.appUrl) {
+    try {
+      const url = new URL(env.appUrl);
+      if (url.protocol === "https:" || url.protocol === "http:") return url.origin;
+    } catch {
+      // Fall through to APP_HOST.
+    }
+  }
+  if (env.appHost) {
+    const hostname = hostnameOf(env.appHost);
+    return `${LOCAL_HOSTS.has(hostname) ? "http" : "https"}://${env.appHost.trim().toLowerCase()}`;
+  }
+  return null;
 }
 
 export function hostEnv(): HostEnv {

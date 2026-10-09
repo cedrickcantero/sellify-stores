@@ -14,11 +14,15 @@ vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 const current = { shopId: "" };
 vi.mock("./store-context", () => ({
   requireLiveStore: async () => ({ shopId: current.shopId, basePath: "/s/test", preview: false }),
+  loadStore: async () => ({ shopId: current.shopId, basePath: "/s/test", preview: false }),
 }));
 
-const { addToBasket, removeFromBasket, setBasketQty } = await import("./basket-actions");
+const { addToBasket, clearBasket, removeFromBasket, setBasketQty } = await import("./basket-actions");
 const { cartCookieName, readBuyableCart, writeCart } = await import("@/services/cart");
 const { forShop } = await import("@/data");
+const { fulfilOrder } = await import("@/services/fulfil-order");
+const { encodeOrderMetadata } = await import("@/domain/order-metadata");
+const { createFakeMailer } = await import("@/email");
 const { seedTwoShops } = await import("@/test/seed");
 
 const input = (title: string, stockQty: number) => ({
@@ -188,5 +192,51 @@ describe("readBuyableCart", () => {
     expect(lines).toEqual([{ productId: live.id, qty: 2 }]);
     // The basket badge is the sum of these quantities: dead lines add nothing.
     expect(lines.reduce((sum, line) => sum + line.qty, 0)).toBe(2);
+  });
+});
+
+describe("clearBasket after an order", () => {
+  async function paidOrder(shopId: string, productId: string, sessionId: string) {
+    await fulfilOrder(
+      {
+        id: sessionId,
+        metadata: encodeOrderMetadata(shopId, [{ productId, qty: 1, unitPrice: 19900 }]),
+        clientReferenceId: shopId,
+        customerEmail: null,
+        paymentStatus: "paid",
+        amountTotal: 19900,
+      },
+      { mailer: createFakeMailer() },
+    );
+  }
+
+  it("empties the basket on the first view of a confirmed order, and not when it is reopened", async () => {
+    const { shopA } = await setup();
+    const phone = await forShop(shopA.shopId).products.create(input("Pixel 7", 9));
+    await paidOrder(shopA.shopId, phone.id, "cs_test_first");
+    await writeCart(shopA.shopId, [{ productId: phone.id, qty: 2 }]);
+
+    await clearBasket("s", "cs_test_first");
+    expect(jar.has(cartCookieName(shopA.shopId))).toBe(false);
+
+    // A new basket, then the old confirmation is opened again.
+    await writeCart(shopA.shopId, [{ productId: phone.id, qty: 1 }]);
+    await clearBasket("s", "cs_test_first");
+    expect(rawLines(shopA.shopId)).toEqual([{ productId: phone.id, qty: 1 }]);
+
+    // A different order clears again.
+    await paidOrder(shopA.shopId, phone.id, "cs_test_second");
+    await clearBasket("s", "cs_test_second");
+    expect(jar.has(cartCookieName(shopA.shopId))).toBe(false);
+  });
+
+  it("leaves the basket alone for an order this shop has not recorded", async () => {
+    const { shopA } = await setup();
+    const phone = await forShop(shopA.shopId).products.create(input("Pixel 7", 9));
+    await writeCart(shopA.shopId, [{ productId: phone.id, qty: 2 }]);
+
+    await clearBasket("s", "cs_test_unknown");
+    await clearBasket("s", "not-a-session-id");
+    expect(rawLines(shopA.shopId)).toEqual([{ productId: phone.id, qty: 2 }]);
   });
 });

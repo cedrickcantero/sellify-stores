@@ -23,6 +23,11 @@ describe("order metadata", () => {
     expect(decodeOrderMetadata(meta)).toEqual({ ok: true, value: { shopId: "shop-1", lines } });
   });
 
+  it("throws instead of silently cutting an order that does not fit", () => {
+    const lines = Array.from({ length: 200 }, (_, i) => ({ productId: `p${i}-${"x".repeat(90)}`, qty: 1, unitPrice: 100 }));
+    expect(() => encodeOrderMetadata("shop-1", lines)).toThrow(/too large/i);
+  });
+
   it("refuses metadata that was not created by this app", () => {
     expect(decodeOrderMetadata({}).ok).toBe(false);
     expect(decodeOrderMetadata({ shopId: "s", lines: "p:1:100" }).ok).toBe(false);

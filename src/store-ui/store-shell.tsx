@@ -112,6 +112,20 @@ export function StoreShell({
   );
 }
 
+// The shell for the order confirmation of a store that has since gone
+// offline: the brand, then the page. A customer who paid still sees what
+// happened to their order.
+export function StoreOrderShell({ brand, children }: { brand: StoreConfig["brand"]; children: ReactNode }) {
+  return (
+    <StoreTheme brand={brand}>
+      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-10">
+        <p className="font-(family-name:--store-font-heading) text-xl font-bold">{brand.name}</p>
+        {children}
+      </main>
+    </StoreTheme>
+  );
+}
+
 // Shown when the shop exists but its store is switched off or was never
 // published. Uses the last published brand (or the shop's name).
 export function StoreOffline({ brand }: { brand: StoreConfig["brand"] }) {

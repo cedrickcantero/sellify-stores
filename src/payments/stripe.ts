@@ -2,6 +2,7 @@ import "server-only";
 import Stripe from "stripe";
 import {
   InvalidWebhookError,
+  type NewSession,
   PaymentsNotConfiguredError,
   type PaidSession,
   type PaymentEvent,
@@ -35,24 +36,33 @@ function toSession(session: Stripe.Checkout.Session): PaidSession {
   };
 }
 
+// Card only. Delayed methods (bank debits and transfers) send
+// checkout.session.completed before the money has arrived, with
+// payment_status "unpaid"; fulfilling then would hand over goods unpaid. The
+// webhook also ignores any unpaid completed session as a second guard.
+export function buildSessionParams(input: NewSession): Stripe.Checkout.SessionCreateParams {
+  return {
+    mode: "payment",
+    allowed_payment_method_types: ["card"],
+    client_reference_id: input.clientReferenceId,
+    metadata: input.metadata,
+    success_url: input.successUrl,
+    cancel_url: input.cancelUrl,
+    line_items: input.lines.map((line) => ({
+      quantity: line.quantity,
+      price_data: {
+        currency: input.currency,
+        unit_amount: line.unitAmount,
+        product_data: { name: line.name.slice(0, 250) },
+      },
+    })),
+  };
+}
+
 export function createStripeGateway(): PaymentGateway {
   return {
     async createSession(input) {
-      const session = await stripe().checkout.sessions.create({
-        mode: "payment",
-        client_reference_id: input.clientReferenceId,
-        metadata: input.metadata,
-        success_url: input.successUrl,
-        cancel_url: input.cancelUrl,
-        line_items: input.lines.map((line) => ({
-          quantity: line.quantity,
-          price_data: {
-            currency: input.currency,
-            unit_amount: line.unitAmount,
-            product_data: { name: line.name.slice(0, 250) },
-          },
-        })),
-      });
+      const session = await stripe().checkout.sessions.create(buildSessionParams(input));
       if (!session.url) throw new Error("Stripe returned a Checkout session without a url.");
       return { id: session.id, url: session.url };
     },

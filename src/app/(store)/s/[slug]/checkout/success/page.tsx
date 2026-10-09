@@ -1,11 +1,14 @@
+import { headers } from "next/headers";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { formatCents } from "@/domain/product";
+import { clientIp } from "@/domain/abuse";
 import { getOrderStatus } from "@/services/order-status";
 import { ClearBasket, OrderRefresh } from "@/store-ui/checkout-forms";
 import { Heading, storeSecondaryButtonClass } from "@/store-ui/product-views";
 import { storeHref } from "@/store-ui/store-href";
 import { clearBasket } from "../../basket-actions";
-import { requireLiveStore } from "../../store-context";
+import { loadStore } from "../../store-context";
 
 // Never cached: what it says depends on whether the webhook has run yet.
 export const dynamic = "force-dynamic";
@@ -16,12 +19,16 @@ export const dynamic = "force-dynamic";
 export default async function CheckoutSuccessPage({ params, searchParams }: PageProps<"/s/[slug]/checkout/success">) {
   const { slug } = await params;
   const { session_id: sessionParam } = await searchParams;
-  const { shopId, basePath, preview } = await requireLiveStore(slug, "shop");
+  // Not requireLiveStore: a customer who has paid still sees the outcome if
+  // the store was switched offline or its shop tab turned off since.
+  const store = await loadStore(slug);
+  if (!store) notFound();
+  const { shopId, basePath, preview } = store;
   const sessionId = typeof sessionParam === "string" ? sessionParam : undefined;
 
   let status;
   try {
-    status = await getOrderStatus(shopId, sessionId);
+    status = await getOrderStatus(shopId, sessionId, { ip: clientIp(await headers()) });
   } catch (error) {
     console.error("Could not check the order with the payment provider.", error);
     return (
@@ -62,7 +69,7 @@ export default async function CheckoutSuccessPage({ params, searchParams }: Page
   const refund = sale.status === "needs_refund";
   return (
     <div className="flex flex-col gap-6">
-      <ClearBasket action={clearBasket.bind(null, slug)} />
+      <ClearBasket action={clearBasket.bind(null, slug, sessionId ?? "")} />
       {refund ? (
         <>
           <Heading>There is a problem with your order</Heading>

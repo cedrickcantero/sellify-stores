@@ -85,12 +85,35 @@ describe("handleStripeWebhook", () => {
     expect(await repos.sales.list()).toHaveLength(0);
   });
 
-  it("answers 400 for an order of ours that does not add up", async () => {
-    const { shopA, repos, line } = await setup();
+  it("answers 200 and records a needs_refund sale for an order of ours that does not add up", async () => {
+    const { shopA, repos, phone, line } = await setup();
     const deps = { gateway: createFakeGateway(), mailer: createFakeMailer() };
     const raw = body(paid(shopA.shopId, [line], { amountTotal: 5 }));
-    expect(await handleStripeWebhook(raw, FAKE_SIGNATURE, deps)).toMatchObject({ status: 400 });
+    expect(await handleStripeWebhook(raw, FAKE_SIGNATURE, deps)).toMatchObject({ status: 200 });
+    expect(await repos.sales.list()).toMatchObject([{ status: "needs_refund", total: 5 }]);
+    expect((await repos.products.get(phone.id))?.stockQty).toBe(2);
+    expect((await repos.emailOutbox.list()).map((e) => e.kind).sort()).toEqual(["order_issue_customer", "order_shop"]);
+  });
+
+  it("answers 200 and logs only the session id for a paid order whose shop is gone", async () => {
+    const { line } = await setup();
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const raw = body(paid("deleted-shop", [line]));
+    const result = await handleStripeWebhook(raw, FAKE_SIGNATURE, { gateway: createFakeGateway() });
+    const logged = error.mock.calls.flat().map(String).join(" ");
+    error.mockRestore();
+    expect(result).toMatchObject({ status: 200 });
+    expect(logged).toContain("cs_test_hook");
+    expect(logged).not.toContain("buyer@example.com");
+  });
+
+  it("answers 200 and records nothing for a completed session that is not paid yet", async () => {
+    const { shopA, repos, line } = await setup();
+    const deps = { gateway: createFakeGateway(), mailer: createFakeMailer() };
+    const raw = body(paid(shopA.shopId, [line], { paymentStatus: "unpaid" }));
+    expect(await handleStripeWebhook(raw, FAKE_SIGNATURE, deps)).toMatchObject({ status: 200 });
     expect(await repos.sales.list()).toHaveLength(0);
+    expect(await repos.emailOutbox.list()).toHaveLength(0);
   });
 
   it("answers 500 so Stripe retries when fulfilment fails for another reason", async () => {

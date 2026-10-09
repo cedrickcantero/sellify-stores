@@ -15,6 +15,7 @@ const ID_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
 
 export function encodeOrderMetadata(shopId: string, lines: OrderLine[]): Record<string, string> {
   const text = lines.map((l) => `${l.productId}:${l.qty}:${l.unitPrice}`).join("|");
+  if (Math.ceil(text.length / CHUNK) > MAX_CHUNKS) throw new Error("The order is too large to send to Stripe.");
   const meta: Record<string, string> = { app: ORDER_APP, shopId };
   for (let i = 0, n = 0; i < text.length; i += CHUNK, n++) {
     meta[n === 0 ? "lines" : `lines_${n}`] = text.slice(i, i + CHUNK);

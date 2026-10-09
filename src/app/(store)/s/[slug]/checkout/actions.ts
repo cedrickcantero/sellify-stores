@@ -7,6 +7,7 @@ import { PaymentsNotConfiguredError } from "@/payments/gateway";
 import { clientIp, isHoneypotTripped, rateLimit } from "@/services/abuse";
 import { loadBasket, writeCart } from "@/services/cart";
 import { createCheckout } from "@/services/checkout";
+import { checkoutReturnUrls } from "@/services/checkout-urls";
 import { listStoreProducts } from "@/services/store-products";
 import { storeHref } from "@/store-ui/store-href";
 import { requireLiveStore } from "../store-context";
@@ -25,7 +26,8 @@ const MESSAGES = {
 
 export async function startCheckout(slug: string, _previous: CheckoutState, form: FormData): Promise<CheckoutState> {
   if (typeof slug !== "string" || slug.length === 0 || slug.length > 100) return { message: MESSAGES.failed };
-  const { shopId, basePath, preview } = await requireLiveStore(slug, "shop");
+  const store = await requireLiveStore(slug, "shop");
+  const { shopId, basePath, preview } = store;
   const basket = storeHref(basePath, "/basket", preview);
   const changed = storeHref(basePath, "/basket", preview, "stock=changed");
 
@@ -47,14 +49,12 @@ export async function startCheckout(slug: string, _previous: CheckoutState, form
   }
   if (lines.length === 0) redirect(basket);
 
-  const proto = requestHeaders.get("x-forwarded-proto")?.split(",")[0] ?? "http";
-  const origin = `${proto}://${requestHeaders.get("host") ?? "localhost:3000"}`;
   let result;
   try {
-    result = await createCheckout(shopId, lines, {
-      success: `${origin}${storeHref(basePath, "/checkout/success", preview)}`,
-      cancel: `${origin}${basket}`,
-    });
+    // The host header only says how the customer arrived; the addresses
+    // themselves come from configuration.
+    const urls = await checkoutReturnUrls({ shopId, slug: store.slug, basePath }, requestHeaders.get("host") ?? "", preview);
+    result = await createCheckout(shopId, lines, urls);
   } catch (error) {
     if (error instanceof PaymentsNotConfiguredError) {
       console.error(error.message);

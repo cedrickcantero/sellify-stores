@@ -40,6 +40,14 @@ export type OnlineSaleInput = {
   items: SaleItem[];
 };
 
+export type UnfulfilledSaleInput = {
+  stripeSessionId: string;
+  /** What the customer paid, in cents. */
+  total: number;
+  /** The lines that could be attributed to this shop's products; may be empty. */
+  items: SaleItem[];
+};
+
 export type SalesRepo = {
   /** The shop's newest sales (at most 200), newest first. */
   list(filter?: SaleFilter): Promise<SaleWithItems[]>;
@@ -51,6 +59,13 @@ export type SalesRepo = {
    * `{ duplicate: true }`, so the caller must not decrement stock again.
    */
   createOnline(tx: Tx, input: OnlineSaleInput): Promise<{ saleId: string } | { duplicate: true }>;
+  /**
+   * Records a paid online order that could not be fulfilled as a
+   * `needs_refund` sale keyed by the Stripe session id, taking no stock. The
+   * total is what was paid, so it need not match `items` (which may be
+   * empty). A repeat returns `{ duplicate: true }`.
+   */
+  createUnfulfilled(tx: Tx, input: UnfulfilledSaleInput): Promise<{ saleId: string } | { duplicate: true }>;
   /**
    * Inserts a completed POS sale and its lines; the caller has already taken
    * the stock. Returns the saved total in cents.
@@ -114,16 +129,17 @@ async function insertSale(
   channel: SaleChannel,
   items: SaleItem[],
   stripeSessionId?: string,
+  unfulfilled?: { total: number },
 ): Promise<{ saleId: string; total: number } | null> {
-  if (items.length === 0) throw new Error("A sale needs at least one item");
-  const total = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+  if (items.length === 0 && !unfulfilled) throw new Error("A sale needs at least one item");
+  const total = unfulfilled?.total ?? items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
   const [row] = await tx
     .insert(sale)
-    .values({ shopId, channel, total, stripeSessionId })
+    .values({ shopId, channel, total, stripeSessionId, ...(unfulfilled ? { status: "needs_refund" as const } : {}) })
     .onConflictDoNothing({ target: sale.stripeSessionId })
     .returning({ id: sale.id });
   if (!row) return null;
-  await tx.insert(saleItem).values(
+  if (items.length > 0) await tx.insert(saleItem).values(
     items.map((item) => ({
       saleId: row.id,
       productId: item.productId,
@@ -195,6 +211,13 @@ export function salesRepo(shopId: string): SalesRepo {
 
     async createOnline(tx, input) {
       const created = await insertSale(tx, shopId, "online", input.items, input.stripeSessionId);
+      return created ? { saleId: created.saleId } : { duplicate: true };
+    },
+
+    async createUnfulfilled(tx, input) {
+      const created = await insertSale(tx, shopId, "online", input.items, input.stripeSessionId, {
+        total: input.total,
+      });
       return created ? { saleId: created.saleId } : { duplicate: true };
     },
 
