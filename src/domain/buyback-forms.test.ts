@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { MAX_EUROS_MESSAGE, parseBasePriceForm, parseDeductionsForm, parseQuoteId } from "./buyback-forms";
+import {
+  MAX_EUROS_MESSAGE,
+  parseBasePriceForm,
+  parseBuybackCustomer,
+  parseDeductionsForm,
+  parseQuoteId,
+  parseQuoteInput,
+} from "./buyback-forms";
 
 describe("parseBasePriceForm", () => {
   const valid = { deviceModelId: "apple-iphone-13", storage: "128GB", basePrice: "250.50" };
@@ -81,5 +88,57 @@ describe("parseQuoteId", () => {
     expect(parseQuoteId("")).toBeNull();
     expect(parseQuoteId(null)).toBeNull();
     expect(parseQuoteId("x".repeat(100))).toBeNull();
+  });
+});
+
+describe("parseQuoteInput", () => {
+  const valid = {
+    deviceModelId: "apple-iphone-13",
+    storage: "128GB",
+    answers: { screen_cracked: false, battery_ok: true, powers_on: true },
+  };
+
+  it("accepts a model, storage and the three yes/no answers", () => {
+    expect(parseQuoteInput(valid)).toEqual({ ok: true, value: valid });
+  });
+
+  it("requires every question to be answered with a boolean", () => {
+    const missing = parseQuoteInput({ ...valid, answers: { screen_cracked: false, battery_ok: true } });
+    expect(missing.ok).toBe(false);
+    const text = parseQuoteInput({ ...valid, answers: { ...valid.answers, powers_on: "yes" } });
+    expect(text.ok).toBe(false);
+  });
+
+  it("requires a model and a storage size", () => {
+    const result = parseQuoteInput({ ...valid, deviceModelId: "", storage: "" });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.fieldErrors.deviceModelId).toBe("Choose a model.");
+      expect(result.fieldErrors.storage).toBe("Choose a storage size.");
+    }
+  });
+});
+
+describe("parseBuybackCustomer", () => {
+  const valid = { name: " Niamh Walsh ", phone: "085 123 4567", email: "niamh@example.com" };
+
+  it("trims the name and keeps valid details", () => {
+    expect(parseBuybackCustomer(valid)).toEqual({
+      ok: true,
+      value: { name: "Niamh Walsh", phone: "085 123 4567", email: "niamh@example.com" },
+    });
+  });
+
+  it("reports each invalid field", () => {
+    const result = parseBuybackCustomer({ name: " ", phone: "abc", email: "nope" });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(Object.keys(result.fieldErrors).sort()).toEqual(["email", "name", "phone"]);
+    }
+  });
+
+  it("limits the name to 80 characters", () => {
+    expect(parseBuybackCustomer({ ...valid, name: "a".repeat(81) }).ok).toBe(false);
+    expect(parseBuybackCustomer({ ...valid, name: "a".repeat(80) }).ok).toBe(true);
   });
 });

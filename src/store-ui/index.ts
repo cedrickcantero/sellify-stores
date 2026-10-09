@@ -4,5 +4,6 @@
 export { STORE_TABS, StoreOffline, StoreShell, storeHref, type StoreTab } from "./store-shell";
 export { StoreHome } from "./store-home";
 export { StoreTheme } from "./store-theme";
+export { storeButtonClass, storeControlClass, storeLinkButtonClass } from "./form-controls";
 export { HoneypotField } from "./honeypot-field";
 export { TabPlaceholder } from "./tab-placeholder";

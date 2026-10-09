@@ -104,3 +104,44 @@ export function parseQuoteId(input: unknown): string | null {
   const parsed = quoteIdSchema.safeParse(input);
   return parsed.success ? parsed.data : null;
 }
+
+const quoteInputSchema = z.object({
+  deviceModelId: z.string().min(1, "Choose a model.").max(100, "Choose a model."),
+  storage: z.string().min(1, "Choose a storage size.").max(40, "Choose a storage size."),
+  answers: z.object(
+    Object.fromEntries(
+      BUYBACK_QUESTIONS.map((q) => [q.key, z.boolean({ error: "Answer every question." })]),
+    ) as Record<BuybackQuestionKey, z.ZodBoolean>,
+  ),
+});
+
+export type QuoteInput = z.infer<typeof quoteInputSchema>;
+
+// What a customer sends to get an offer: the model, the storage size and a
+// yes or no for each of the three condition questions.
+export function parseQuoteInput(input: unknown): ParsedForm<QuoteInput> {
+  const parsed = quoteInputSchema.safeParse(input);
+  if (parsed.success) return { ok: true, value: parsed.data };
+  return { ok: false, fieldErrors: firstErrors(parsed.error, (path) => String(path[0])) };
+}
+
+const customerSchema = z.object({
+  name: z.string().trim().min(1, "Enter your name.").max(80, "Keep your name to 80 characters."),
+  phone: z
+    .string()
+    .trim()
+    .regex(/^\+?[\d\s()-]{6,25}$/, "Enter a phone number like 085 123 4567."),
+  email: z
+    .string()
+    .trim()
+    .max(254, "Enter an email like you@example.com.")
+    .pipe(z.email({ error: "Enter an email like you@example.com." })),
+});
+
+export type BuybackCustomerInput = z.infer<typeof customerSchema>;
+
+export function parseBuybackCustomer(input: Record<string, string>): ParsedForm<BuybackCustomerInput> {
+  const parsed = customerSchema.safeParse(input);
+  if (parsed.success) return { ok: true, value: parsed.data };
+  return { ok: false, fieldErrors: firstErrors(parsed.error, (path) => String(path[0])) };
+}
