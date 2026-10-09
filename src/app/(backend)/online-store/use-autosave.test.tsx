@@ -112,26 +112,10 @@ describe("useAutosave", () => {
     expect(result.current.unpublishedChanges).toBe(true);
   });
 
-  it("keeps an invalid field's error when another field of the section saves, and never says saved", async () => {
+  it("keeps a rejected patch, so an invalid field's error stays until that field is fixed", async () => {
     const save = vi
       .fn<(patch: unknown) => Promise<SaveDraftResult>>()
       .mockResolvedValueOnce({ ok: false, errors: { "brand.colors.primary": "Enter a colour like #0F766E." } })
-      .mockResolvedValueOnce({ ok: true, unpublishedChanges: true });
-    const { result } = setup(save);
-
-    act(() => result.current.queue("brand", { brand: { colors: { primary: "#12" } } }));
-    await act(async () => void (await vi.advanceTimersByTimeAsync(DELAY)));
-    act(() => result.current.queue("brand", { brand: { colors: { accent: "#00ff00" } } }));
-    await act(async () => void (await vi.advanceTimersByTimeAsync(DELAY)));
-
-    expect(save).toHaveBeenLastCalledWith({ brand: { colors: { accent: "#00ff00" } } });
-    expect(result.current.errors).toEqual({ "brand.colors.primary": "Enter a colour like #0F766E." });
-    expect(result.current.status).toBe("error");
-  });
-
-  it("clears an error once its own field saves", async () => {
-    const save = vi
-      .fn<(patch: unknown) => Promise<SaveDraftResult>>()
       .mockResolvedValueOnce({ ok: false, errors: { "brand.colors.primary": "Enter a colour like #0F766E." } })
       .mockResolvedValue({ ok: true, unpublishedChanges: true });
     const { result } = setup(save);
@@ -140,10 +124,91 @@ describe("useAutosave", () => {
     await act(async () => void (await vi.advanceTimersByTimeAsync(DELAY)));
     act(() => result.current.queue("brand", { brand: { colors: { accent: "#00ff00" } } }));
     await act(async () => void (await vi.advanceTimersByTimeAsync(DELAY)));
+    expect(result.current.errors).toEqual({ "brand.colors.primary": "Enter a colour like #0F766E." });
+    expect(result.current.status).toBe("error");
+
     act(() => result.current.queue("brand", { brand: { colors: { primary: "#112233" } } }));
     await act(async () => void (await vi.advanceTimersByTimeAsync(DELAY)));
+    expect(save).toHaveBeenLastCalledWith({ brand: { colors: { primary: "#112233", accent: "#00ff00" } } });
     expect(result.current.errors).toEqual({});
     expect(result.current.status).toBe("saved");
+  });
+
+  it("A: a valid phone sent with a bad email is still saved once the email is fixed", async () => {
+    const save = vi
+      .fn<(patch: unknown) => Promise<SaveDraftResult>>()
+      .mockResolvedValueOnce({ ok: false, errors: { "contact.email": "Enter an email like hello@yourshop.ie." } })
+      .mockResolvedValue({ ok: true, unpublishedChanges: true });
+    const { result } = setup(save);
+
+    act(() => result.current.queue("contact", { contact: { phone: "0851234567" } }));
+    act(() => result.current.queue("contact", { contact: { email: "nope" } }));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(DELAY)));
+    expect(result.current.errors).toEqual({ "contact.email": "Enter an email like hello@yourshop.ie." });
+
+    act(() => result.current.queue("contact", { contact: { email: "hi@shop.ie" } }));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(DELAY)));
+    expect(save).toHaveBeenLastCalledWith({ contact: { phone: "0851234567", email: "hi@shop.ie" } });
+    expect(result.current.errors).toEqual({});
+  });
+
+  it("B: an old error clears when a later rejection no longer lists that field", async () => {
+    const save = vi
+      .fn<(patch: unknown) => Promise<SaveDraftResult>>()
+      .mockResolvedValueOnce({ ok: false, errors: { "contact.email": "Enter an email like hello@yourshop.ie." } })
+      .mockResolvedValueOnce({ ok: false, errors: { "contact.phone": "Keep the phone number to 40 characters." } });
+    const { result } = setup(save);
+
+    act(() => result.current.queue("contact", { contact: { email: "nope" } }));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(DELAY)));
+    act(() => result.current.queue("contact", { contact: { email: "hi@shop.ie", phone: "x".repeat(41) } }));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(DELAY)));
+    expect(result.current.errors).toEqual({ "contact.phone": "Keep the phone number to 40 characters." });
+  });
+
+  it("does not resend a rejected patch by itself", async () => {
+    const save = vi.fn(async () => ({ ok: false, errors: { "contact.email": "Bad." } }) as SaveDraftResult);
+    const { result } = setup(save);
+
+    act(() => result.current.queue("contact", { contact: { email: "nope" } }));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(DELAY * 5)));
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(result.current.status).toBe("error");
+  });
+
+  it("clears a stale network error when a later reply arrives", async () => {
+    const save = vi
+      .fn<(patch: unknown) => Promise<SaveDraftResult>>()
+      .mockRejectedValueOnce(new Error("network"))
+      .mockResolvedValueOnce({ ok: false, errors: { "contact.email": "Bad." } });
+    const { result } = setup(save);
+
+    act(() => result.current.queue("contact", { contact: { phone: "1" } }));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(DELAY)));
+    act(() => result.current.queue("contact", { contact: { email: "nope" } }));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(DELAY)));
+    expect(result.current.errors).toEqual({ "contact.email": "Bad." });
+  });
+
+  it("flush resends kept patches and reports saved, invalid or failed", async () => {
+    const save = vi
+      .fn<(patch: unknown) => Promise<SaveDraftResult>>()
+      .mockRejectedValueOnce(new Error("network"))
+      .mockRejectedValueOnce(new Error("network"))
+      .mockResolvedValueOnce({ ok: false, errors: { "contact.phone": "Bad." } })
+      .mockResolvedValue({ ok: true, unpublishedChanges: true });
+    const { result } = setup(save);
+
+    act(() => result.current.queue("contact", { contact: { phone: "1" } }));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(DELAY)));
+    let outcome: string = "";
+    await act(async () => void (outcome = await result.current.flush()));
+    expect(outcome).toBe("failed");
+    await act(async () => void (outcome = await result.current.flush()));
+    expect(outcome).toBe("invalid");
+    await act(async () => void (outcome = await result.current.flush()));
+    expect(outcome).toBe("saved");
+    expect(result.current.errors).toEqual({});
   });
 
   it("resends a patch lost to a network failure together with the next edit", async () => {
@@ -169,7 +234,7 @@ describe("useAutosave", () => {
     const { result } = setup(save);
 
     act(() => result.current.queue("about", { content: { about: "Last edit" } }));
-    await act(async () => void (await result.current.flush()));
+    await act(async () => expect(await result.current.flush()).toBe("saved"));
     expect(save).toHaveBeenCalledWith({ content: { about: "Last edit" } });
     expect(result.current.status).toBe("saved");
 

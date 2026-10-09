@@ -3,6 +3,7 @@
 import { useOptimistic, useState, useTransition } from "react";
 import type { FormEvent } from "react";
 import { Alert, Button, Card, StatusBadge, Switch } from "@/ui";
+import type { FlushResult } from "./use-autosave";
 import { publishStoreAction, setStoreOnlineAction, type StoreFormState } from "./actions";
 
 // Store status, live address, the online switch and the Publish button.
@@ -19,7 +20,7 @@ export function StoreStatusCard({
   previewUrl: string;
   unpublishedChanges: boolean;
   /** Sends any edits still waiting to be autosaved; resolves when done. */
-  flush: () => Promise<void>;
+  flush: () => Promise<FlushResult>;
   /** Called after a successful publish. */
   onPublished: () => void;
   published: boolean;
@@ -36,7 +37,17 @@ export function StoreStatusCard({
     event.preventDefault();
     setPublishing(true);
     try {
-      await flush();
+      // Publishing copies the saved draft, so nothing may be left unsaved.
+      const saved = await flush();
+      if (saved !== "saved") {
+        setState({
+          error:
+            saved === "invalid"
+              ? "Fix the highlighted fields, then publish."
+              : "Could not save. Check your connection and try again.",
+        });
+        return;
+      }
       const result = await publishStoreAction();
       setState(result);
       if (!result.error) onPublished();

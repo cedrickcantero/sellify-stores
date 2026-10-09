@@ -32,16 +32,21 @@ function mergePatch(base: Patch, next: Patch): Patch {
   return out;
 }
 
+/** How a flush ended: everything saved, a field the server rejected, or a request that failed. */
+export type FlushResult = "saved" | "invalid" | "failed";
+
 /**
  * Debounced autosave for the store editor. `queue(section, patch)` waits
  * `delayMs` after the last edit of that section, then sends the merged patch
  * through `save`. Sections have their own timers but their requests run one
  * at a time, in the order they fire.
  *
- * Field errors stay until a save contains that field again, so an invalid
- * value is never reported as saved. A request that fails to reach the server
- * is kept and sent again with the section's next edit. `flush()` sends
- * everything waiting and resolves when it has been saved or has failed.
+ * A patch the server did not save (rejected or not reached) is kept and sent
+ * again, under the section's next edit or a flush; newer edits override its
+ * values. It is never resent by itself, so an invalid value cannot loop.
+ * After every reply the errors of the fields that were sent are replaced by
+ * the reply's own, so an error never outlives the field it was about.
+ * `flush()` sends everything waiting or kept and says how it ended.
  */
 export function useAutosave({
   save,
@@ -58,8 +63,9 @@ export function useAutosave({
   });
 
   const pending = useRef(new Map<string, { patch: Patch; timer: ReturnType<typeof setTimeout> }>());
-  // Patches that could not be sent (network), per section, to retry.
+  // Patches the server has not saved, per section, to send again.
   const unsent = useRef(new Map<string, Patch>());
+  const errorsRef = useRef<Record<string, FieldErrors>>({});
   const chain = useRef<Promise<void>>(Promise.resolve());
   const inFlight = useRef(0);
 
@@ -70,38 +76,44 @@ export function useAutosave({
 
   const refreshSaving = useCallback(() => setSaving(pending.current.size > 0 || inFlight.current > 0), []);
 
+  const updateErrors = useCallback((update: (current: FieldErrors) => FieldErrors, section: string) => {
+    const next = update(errorsRef.current[section] ?? {});
+    const all = { ...errorsRef.current };
+    if (Object.keys(next).length > 0) all[section] = next;
+    else delete all[section];
+    errorsRef.current = all;
+    setErrorsBySection(all);
+  }, []);
+
   const run = useCallback(
     (section: string, patch: Patch) => {
       inFlight.current += 1;
       chain.current = chain.current.then(async () => {
-        const toSend = unsent.current.has(section) ? mergePatch(unsent.current.get(section)!, patch) : patch;
+        const kept = unsent.current.get(section);
+        const toSend = kept ? mergePatch(kept, patch) : patch;
+        // The fields this request answers; any error about them is replaced.
+        const sent = leafPaths(toSend);
+        const answers = (key: string) => sent.some((path) => key === path || key.startsWith(`${path}.`));
         try {
           const result = await saveRef.current(toSend);
-          unsent.current.delete(section);
           if (result.ok) {
+            unsent.current.delete(section);
             setUnpublishedChanges(result.unpublishedChanges);
             setSaved(true);
-            // Only the fields this save contained are answered.
-            const answered = leafPaths(toSend);
-            setErrorsBySection((all) => {
-              const current = all[section];
-              if (!current) return all;
-              const kept = Object.fromEntries(
-                Object.entries(current).filter(
-                  ([key]) => key !== "config" && !answered.some((path) => key === path || key.startsWith(`${path}.`)),
-                ),
-              );
-              const rest = { ...all };
-              if (Object.keys(kept).length > 0) rest[section] = kept;
-              else delete rest[section];
-              return rest;
-            });
+            updateErrors((current) => Object.fromEntries(Object.entries(current).filter(([k]) => k !== "config" && !answers(k))), section);
           } else {
-            setErrorsBySection((all) => ({ ...all, [section]: { ...all[section], ...result.errors } }));
+            unsent.current.set(section, toSend);
+            updateErrors(
+              (current) => ({
+                ...Object.fromEntries(Object.entries(current).filter(([k]) => k !== "config" && !answers(k))),
+                ...result.errors,
+              }),
+              section,
+            );
           }
         } catch {
           unsent.current.set(section, toSend);
-          setErrorsBySection((all) => ({ ...all, [section]: { ...all[section], config: NETWORK_ERROR } }));
+          updateErrors((current) => ({ ...current, config: NETWORK_ERROR }), section);
         } finally {
           inFlight.current -= 1;
           refreshSaving();
@@ -109,7 +121,7 @@ export function useAutosave({
       });
       return chain.current;
     },
-    [refreshSaving],
+    [refreshSaving, updateErrors],
   );
 
   const queue = useCallback(
@@ -128,14 +140,22 @@ export function useAutosave({
     [delayMs, refreshSaving, run],
   );
 
-  const flush = useCallback(async () => {
+  const flush = useCallback(async (): Promise<FlushResult> => {
+    const waiting = new Set(pending.current.keys());
     for (const [section, { patch, timer }] of [...pending.current]) {
       clearTimeout(timer);
       pending.current.delete(section);
       void run(section, patch);
     }
+    // Patches kept after an unsuccessful save are tried again too.
+    for (const section of [...unsent.current.keys()]) {
+      if (!waiting.has(section)) void run(section, {});
+    }
     refreshSaving();
     await chain.current;
+    if (unsent.current.size === 0) return "saved";
+    const invalid = Object.values(errorsRef.current).some((e) => Object.keys(e).some((k) => k !== "config"));
+    return invalid ? "invalid" : "failed";
   }, [refreshSaving, run]);
 
   // Leaving the page sends what is still waiting instead of dropping it.
