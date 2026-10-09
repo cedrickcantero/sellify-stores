@@ -68,6 +68,7 @@ export async function seedDeviceCatalog(url: string): Promise<number> {
 // kept. Add every new tenant table here as later tickets create it.
 const RESET_TABLES = [
   "email_outbox",
+  "product",
   "shop",
   "invitation",
   "member",

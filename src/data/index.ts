@@ -1,8 +1,10 @@
 import "server-only";
 import { buybackRepo, type BuybackRepo } from "./repos/buybacks";
 import { emailOutboxRepo, type EmailOutboxRepo } from "./repos/email-outbox";
+import { productRepo, type ProductRepo } from "./repos/products";
 import { shopRepo, type ShopRepo } from "./repos/shop";
 
+export type { Product, ProductFilter, ProductRepo } from "./repos/products";
 export type { Shop, ShopRepo } from "./repos/shop";
 export type { EmailOutboxRepo, OutboxEmail } from "./repos/email-outbox";
 export type {
@@ -32,6 +34,7 @@ export type ShopRepos = {
   shop: ShopRepo;
   emailOutbox: EmailOutboxRepo;
   buybacks: BuybackRepo;
+  products: ProductRepo;
 };
 
 export function forShop(shopId: string): ShopRepos {
@@ -39,5 +42,6 @@ export function forShop(shopId: string): ShopRepos {
     shop: shopRepo(shopId),
     emailOutbox: emailOutboxRepo(shopId),
     buybacks: buybackRepo(shopId),
+    products: productRepo(shopId),
   };
 }
