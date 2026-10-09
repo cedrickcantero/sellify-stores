@@ -13,6 +13,18 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
+// Refill is wall-clock time, and these tests make dozens of slow round trips
+// to the database, so a real refill would hand tokens back mid-loop and the
+// cap would depend on network speed. Take every token with refill 0: capacity
+// is then exact. Refill itself is covered in services/abuse.int.test.ts.
+vi.mock("@/data", async (importOriginal) => {
+  const data = await importOriginal<typeof import("@/data")>();
+  return {
+    ...data,
+    takeRateLimitToken: (key: string, capacity: number) => data.takeRateLimitToken(key, capacity, 0),
+  };
+});
+
 const { signInAction, signUpAction } = await import("./actions");
 const { seedTwoShops } = await import("@/test/seed");
 
@@ -57,7 +69,7 @@ describe("login rate limit", () => {
   it("still caps attempts on one email across many IPs", async () => {
     const { shopA } = await seedTwoShops();
     const errors: (string | undefined)[] = [];
-    // The loose per-email bucket holds 30 and refills 10 a minute.
+    // The loose per-email bucket holds 30 (no refill here, see the mock above).
     for (let i = 0; i < 40 && errors.at(-1) !== TOO_MANY; i++) {
       requestHeaders.current = new Headers({ "x-real-ip": `192.0.2.${i + 1}` });
       errors.push((await signInAction({}, form({ email: shopA.owner.email, password: "nope-nope" }))).error);
@@ -70,8 +82,7 @@ describe("login rate limit", () => {
   it("refuses many logins from one IP across different emails", async () => {
     requestHeaders.current = new Headers({ "x-real-ip": "198.51.100.20" });
     const errors: (string | undefined)[] = [];
-    // The IP bucket holds 20 and refills slowly (10 a minute), so a few
-    // attempts may be refilled while the loop runs.
+    // The IP bucket holds 20 (no refill here, see the mock above).
     for (let i = 0; i < 26 && errors.at(-1) !== TOO_MANY; i++) {
       const result = await signInAction({}, form({ email: `nobody${i}@example.com`, password: "x" }));
       errors.push(result.error);
