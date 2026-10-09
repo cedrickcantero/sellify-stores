@@ -6,7 +6,8 @@ read each shop's live Sellify data.
 
 Live demo store: https://sellify-stores.vercel.app/s/fixit-galway. What works,
 what does not yet, and what comes next (including photo credits for the demo
-store): `NOTES.md`. Brand guidelines: `docs/brand/`.
+store): `NOTES.md`. Brand guidelines: `docs/brand/`. Architecture and flow
+diagrams: `docs/diagrams/`.
 
 ## Stack
 

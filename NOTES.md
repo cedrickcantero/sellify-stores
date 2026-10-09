@@ -33,6 +33,80 @@ future expiry date and any CVC.
 | **2.9** Demo store | FixIt Galway, with its own guideline (teal, sand and coral, Roboto Slab, a friendly local tone), set up entirely through the backend: products with photos, repair and buyback prices, brand, banner, about, hours, then published. All three tabs work with demo data, and the emails are real (sent through Resend). |
 | Dashboard | Today's sales, upcoming repairs, buybacks waiting to be received and store status, in the shop's timezone. |
 
+### How it works
+
+The three diagrams below are also in `docs/diagrams/` as PNG and SVG images,
+with their Mermaid sources, ready to share.
+
+The services, and how a request moves through them:
+
+```mermaid
+flowchart TB
+    owner(["Shop owner<br/>Sellify backend"])
+    customer(["Customer<br/>public store"])
+    subgraph vercel["Vercel, Frankfurt"]
+        proxy["Proxy<br/>finds the shop, adds headers"]
+        backend["Backend pages<br/>Sellify design system"]
+        store["Store pages<br/>each store's own brand"]
+        services["Services and auth<br/>bookings, quotes, checkout"]
+        data["Data module<br/>queries scoped to one shop"]
+        proxy --> backend
+        proxy --> store
+        backend --> services
+        store --> services
+        services --> data
+    end
+    stripe[("Stripe<br/>Checkout, test mode")]
+    resend[("Resend<br/>email delivery")]
+    blob[("Vercel Blob<br/>logos and photos")]
+    neon[("Neon Postgres<br/>Frankfurt")]
+    owner --> proxy
+    customer --> proxy
+    customer -->|pays on| stripe
+    stripe -->|signed webhook| services
+    services -->|after the save commits| resend
+    services --> blob
+    data --> neon
+```
+
+A shop owner, from signup to a live store:
+
+```mermaid
+flowchart TB
+    start(["Owner opens signup"]) --> create["Create the shop<br/>validated and rate limited"]
+    create --> valid{"Details valid?"}
+    valid -->|No| fix["Show what to fix"] --> create
+    valid -->|Yes| ready["Shop account ready<br/>session picks the shop"]
+    ready --> prices["Add products and prices<br/>inventory, repairs, buybacks"]
+    prices --> edit["Edit store design<br/>private draft and preview"]
+    edit --> preview{"Preview right?"}
+    preview -->|No| keep["Keep editing"] --> edit
+    preview -->|Yes| publish["Publish store"]
+    publish --> live(["Store live at its address"])
+```
+
+A customer, from opening the store to the record in Sellify:
+
+```mermaid
+flowchart TB
+    open(["Customer opens store"]) --> resolve["Server finds the shop<br/>adds security headers"]
+    resolve --> tab{"Which tab?"}
+    tab -->|Shop| basket["Add to basket<br/>prices from database"]
+    basket --> checkout["Stripe checkout<br/>rate limit, honeypot"]
+    checkout --> webhook["Signed webhook<br/>one sale, stock down"]
+    tab -->|Repair| repair["Choose the repair<br/>shop's own price"]
+    repair --> slot["Pick day and time<br/>rate limit, honeypot"]
+    slot --> ticket["Ticket created<br/>no double booking"]
+    tab -->|Sell| model["Model and condition<br/>inputs validated"]
+    model --> offer["See the offer<br/>set by the server"]
+    offer --> accept["Offer accepted<br/>sends only the quote id"]
+    webhook --> emails["Emails sent<br/>after the save commits"]
+    ticket --> emails
+    accept --> emails
+    emails --> backoffice["Owner sees it<br/>only in their own shop"]
+    backoffice --> done(["Customer flow done"])
+```
+
 ### How it was checked
 
 - 417 unit tests and 244 integration tests against a real Postgres
