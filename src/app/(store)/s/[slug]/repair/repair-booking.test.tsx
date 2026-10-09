@@ -65,8 +65,55 @@ describe("RepairBooking", () => {
     expect(screen.queryByLabelText("Name")).toBeNull();
     expect(await screen.findByRole("button", { name: "10am" })).toBeInTheDocument();
 
+    expect(alert).toHaveFocus();
+
     await user.click(screen.getByRole("button", { name: "10am" }));
     expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByLabelText("Name")).toHaveValue("John");
+    expect(screen.getByLabelText("Phone")).toHaveValue("085 123 4567");
+    expect(screen.getByLabelText("Email")).toHaveValue("j@example.com");
+  });
+
+  it("keeps what was typed after a validation error when the slot changes", async () => {
+    const user = userEvent.setup();
+    setup();
+    await reachSlots(user);
+    await user.click(await screen.findByRole("button", { name: "9am" }));
+    bookRepairAction.mockResolvedValue({
+      status: "error",
+      message: "Check the highlighted fields.",
+      fieldErrors: { phone: "Enter a phone number like 085 123 4567." },
+      values: { name: "John", phone: "x", email: "j@example.com" },
+    });
+    await user.type(screen.getByLabelText("Name"), "John");
+    await user.click(screen.getByRole("button", { name: "Book repair" }));
+    await screen.findByText("Check the highlighted fields.");
+
+    await user.click(screen.getByRole("button", { name: "9:30am" }));
+    expect(screen.queryByText("Check the highlighted fields.")).toBeNull();
+    expect(screen.getByLabelText("Name")).toHaveValue("John");
+    expect(screen.getByLabelText("Phone")).toHaveValue("x");
+  });
+
+  it("does not refresh the list for a clash when the day changed since submit", async () => {
+    const user = userEvent.setup();
+    setup();
+    await reachSlots(user);
+    await user.click(await screen.findByRole("button", { name: "9am" }));
+    let resolveBook: (v: unknown) => void = () => {};
+    bookRepairAction.mockReturnValue(new Promise((r) => (resolveBook = r)));
+    await user.click(screen.getByRole("button", { name: "Book repair" }));
+
+    loadSlotsAction.mockResolvedValue({ ok: true, slots: NEW_SLOTS });
+    fireEvent.change(screen.getByLabelText(/Pick a day/), { target: { value: "2030-01-11" } });
+    await screen.findByRole("button", { name: "10am" });
+    const calls = loadSlotsAction.mock.calls.length;
+
+    resolveBook({ status: "error", message: "That time was just taken. Pick another time.", slotTaken: true });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(loadSlotsAction.mock.calls.length).toBe(calls);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByRole("button", { name: "10am" })).toBeInTheDocument();
   });
 
   it("clears the slots when the date leaves the booking window", async () => {

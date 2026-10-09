@@ -12,7 +12,7 @@ const IDLE: BookingState = { status: "idle" };
 const choice =
   "min-h-11 rounded-(--store-radius) border border-(--store-text)/25 px-4 py-2 text-left hover:border-(--store-primary) aria-pressed:border-(--store-primary) aria-pressed:bg-(--store-primary) aria-pressed:text-(--store-on-primary)";
 const input =
-  "min-h-11 aria-invalid:border-2 aria-invalid:border-(--store-primary) w-full rounded-(--store-radius) border border-(--store-text)/40 bg-transparent px-3 py-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--store-primary)";
+  "min-h-11 aria-invalid:border-2 aria-invalid:border-(--store-text) w-full rounded-(--store-radius) border border-(--store-text)/40 bg-transparent px-3 py-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--store-primary)";
 const primaryButton =
   "inline-flex min-h-11 items-center justify-center rounded-(--store-radius) bg-(--store-primary) px-6 py-2 font-semibold text-(--store-on-primary) disabled:opacity-50";
 
@@ -45,42 +45,54 @@ export function RepairBooking({ slug, brands, timezone, firstDate, lastDate }: P
   const [attempt, setAttempt] = useState(0);
   // The repair and day the slot list on screen was asked for; a response for
   // anything else arrived late and is dropped.
-  const wanted = useRef<string | null>(null);
+  const request = useRef(0);
+  // The repair and day the list on screen belongs to (null when cleared).
+  const selection = useRef<string | null>(null);
+  const noticeRef = useRef<HTMLParagraphElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
   function refreshSlots(repairPriceId: string, day: string) {
-    const key = `${repairPriceId}|${day}`;
-    wanted.current = key;
+    const id = ++request.current;
+    selection.current = `${repairPriceId}|${day}`;
     setSlots({ kind: "loading" });
     loadSlotsAction(slug, repairPriceId, day).then(
       (result) => {
-        if (wanted.current !== key) return;
+        if (request.current !== id) return;
         if (result.ok) setSlots({ kind: "ready", slots: result.slots });
         else setSlots({ kind: result.reason === "rate_limited" ? "limited" : "error" });
       },
       () => {
-        if (wanted.current === key) setSlots({ kind: "error" });
+        if (request.current === id) setSlots({ kind: "error" });
       },
     );
   }
 
   function clearSlots() {
-    wanted.current = null;
+    request.current++;
+    selection.current = null;
     setSlots({ kind: "idle" });
   }
 
   const [state, formAction, pending] = useActionState(async (prev: BookingState, form: FormData) => {
+    const submitted = selection.current;
     const next = await bookRepairAction(slug, prev, form);
     setErrorSlot(String(form.get("slotStart") ?? ""));
     setAttempt((n) => n + 1);
     // A clash or a slot that has passed: ask for another slot and refresh the list.
-    if (next.status === "error" && next.slotTaken) {
+    // Skipped when the customer has moved to another repair or day meanwhile.
+    if (next.status === "error" && next.slotTaken && submitted && selection.current === submitted) {
+      const [repairPriceId, day] = submitted.split("|");
       setSlotStart(null);
       setNotice(next.message);
-      if (repairId) refreshSlots(repairId, date);
+      refreshSlots(repairPriceId, day);
     }
     return next;
   }, IDLE);
+
+  // Keyboard focus would fall back to the page when the form unmounts.
+  useEffect(() => {
+    if (notice) noticeRef.current?.focus();
+  }, [notice]);
 
   useEffect(() => {
     if (state.status === "error" && state.fieldErrors) {
@@ -124,7 +136,8 @@ export function RepairBooking({ slug, brands, timezone, firstDate, lastDate }: P
   // A form error belongs to the slot it was made for.
   const formError = state.status === "error" && !state.slotTaken && errorSlot === slotStart ? state : null;
   const errors = formError?.fieldErrors ?? {};
-  const values = formError?.values;
+  // What the customer typed is kept whatever the error; only messages follow the slot.
+  const values = state.status === "error" ? state.values : undefined;
   const sameDay = repair !== undefined && repair.partQty > 0;
 
   return (
@@ -251,7 +264,7 @@ export function RepairBooking({ slug, brands, timezone, firstDate, lastDate }: P
               ) : null}
             </div>
             {notice ? (
-              <p role="alert" className="font-semibold">
+              <p ref={noticeRef} tabIndex={-1} role="alert" className="font-semibold">
                 {notice}
               </p>
             ) : null}
