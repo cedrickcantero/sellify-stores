@@ -93,7 +93,71 @@ describe("buyback base prices", () => {
   });
 });
 
+describe("removing base prices", () => {
+  it("removes one price from its own shop only", async () => {
+    const { shopA, shopB } = await seedTwoShops();
+    const iphone = await model("iPhone 13");
+    for (const shop of [shopA, shopB]) {
+      await forShop(shop.shopId).buybacks.upsertBasePrice({
+        deviceModelId: iphone.id,
+        storage: "128GB",
+        basePrice: 30000,
+      });
+    }
+
+    await forShop(shopA.shopId).buybacks.removeBasePrice(iphone.id, "128GB");
+
+    expect(await forShop(shopA.shopId).buybacks.getBasePrice(iphone.id, "128GB")).toBeNull();
+    expect(await forShop(shopA.shopId).buybacks.offeredModels()).toEqual([]);
+    expect(await forShop(shopB.shopId).buybacks.getBasePrice(iphone.id, "128GB")).toBe(30000);
+  });
+});
+
 describe("buyback deductions", () => {
+  it("replaces all of a shop's rules at once, leaving other shops alone", async () => {
+    const { shopA, shopB } = await seedTwoShops();
+    const buybacks = forShop(shopA.shopId).buybacks;
+    await buybacks.setDeduction({ questionKey: "screen_cracked", answer: true, kind: "amount", value: 5000 });
+    await buybacks.setDeduction({ questionKey: "battery_ok", answer: false, kind: "amount", value: 1000 });
+    await forShop(shopB.shopId).buybacks.setDeduction({
+      questionKey: "battery_ok",
+      answer: false,
+      kind: "amount",
+      value: 700,
+    });
+
+    await buybacks.replaceDeductions([
+      { questionKey: "screen_cracked", answer: true, kind: "amount", value: 7000 },
+      { questionKey: "powers_on", answer: false, kind: "floor", value: 2000 },
+    ]);
+
+    const rules = await buybacks.listDeductions();
+    expect(rules).toHaveLength(2);
+    expect(rules).toContainEqual({ questionKey: "screen_cracked", answer: true, kind: "amount", value: 7000 });
+    expect(rules).toContainEqual({ questionKey: "powers_on", answer: false, kind: "floor", value: 2000 });
+    expect(await forShop(shopB.shopId).buybacks.listDeductions()).toHaveLength(1);
+
+    await buybacks.replaceDeductions([]);
+    expect(await buybacks.listDeductions()).toEqual([]);
+  });
+
+  it("keeps the old rules when a replacement fails part way", async () => {
+    const { shopA } = await seedTwoShops();
+    const buybacks = forShop(shopA.shopId).buybacks;
+    await buybacks.setDeduction({ questionKey: "screen_cracked", answer: true, kind: "amount", value: 5000 });
+
+    await expect(
+      buybacks.replaceDeductions([
+        { questionKey: "battery_ok", answer: false, kind: "amount", value: 1000 },
+        { questionKey: "powers_on", answer: false, kind: "floor", value: 2_147_483_648 },
+      ]),
+    ).rejects.toThrow();
+
+    expect(await buybacks.listDeductions()).toEqual([
+      { questionKey: "screen_cracked", answer: true, kind: "amount", value: 5000 },
+    ]);
+  });
+
   it("sets one rule per question and answer, replacing it on a second set", async () => {
     const { shopA, shopB } = await seedTwoShops();
     const buybacks = forShop(shopA.shopId).buybacks;

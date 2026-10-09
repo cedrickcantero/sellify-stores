@@ -1,102 +1,84 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 import { getActiveShop } from "@/auth/session";
 import { deviceCatalog, forShop } from "@/data";
-import { BUYBACK_QUESTIONS, parseEuros } from "@/domain/buyback-questions";
+import {
+  parseBasePriceForm,
+  parseDeductionsForm,
+  parseQuoteId,
+} from "@/domain/buyback-forms";
+import { BUYBACK_QUESTIONS } from "@/domain/buyback-questions";
 
+// What a form action returns. The forms keep what the owner typed in
+// controlled state, because React clears uncontrolled fields after an action.
 export type FormState = {
   status: "idle" | "saved" | "error";
   message?: string;
   fieldErrors?: Record<string, string>;
 };
 
-const priceSchema = z.object({
-  deviceModelId: z.string().min(1, "Choose a model."),
-  storage: z.string().min(1, "Choose a storage size."),
-  basePrice: z.string(),
-});
+function textFields(formData: FormData, names: string[]): Record<string, string> {
+  const fields: Record<string, string> = {};
+  for (const name of names) {
+    const value = formData.get(name);
+    fields[name] = typeof value === "string" ? value : "";
+  }
+  return fields;
+}
 
 export async function saveBasePrice(_previous: FormState, formData: FormData): Promise<FormState> {
   const { shopId } = await getActiveShop();
-  const parsed = priceSchema.safeParse({
-    deviceModelId: formData.get("deviceModelId") ?? "",
-    storage: formData.get("storage") ?? "",
-    basePrice: formData.get("basePrice") ?? "",
-  });
-  if (!parsed.success) {
-    const fieldErrors: Record<string, string> = {};
-    for (const issue of parsed.error.issues) fieldErrors[String(issue.path[0])] = issue.message;
-    return { status: "error", fieldErrors };
-  }
+  const values = textFields(formData, ["deviceModelId", "storage", "basePrice"]);
 
-  const cents = parseEuros(parsed.data.basePrice);
-  if (cents === null || cents <= 0) {
-    return { status: "error", fieldErrors: { basePrice: "Enter a price above 0." } };
-  }
+  const parsed = parseBasePriceForm(values);
+  if (!parsed.ok) return { status: "error", fieldErrors: parsed.fieldErrors };
 
-  const model = (await deviceCatalog.list()).find((m) => m.id === parsed.data.deviceModelId);
-  if (!model || !model.storageOptions.includes(parsed.data.storage)) {
+  const model = (await deviceCatalog.list()).find((m) => m.id === parsed.value.deviceModelId);
+  if (!model || !model.storageOptions.includes(parsed.value.storage)) {
     return { status: "error", message: "Choose a model and storage size from the list." };
   }
 
-  await forShop(shopId).buybacks.upsertBasePrice({
-    deviceModelId: model.id,
-    storage: parsed.data.storage,
-    basePrice: cents,
-  });
+  await forShop(shopId).buybacks.upsertBasePrice(parsed.value);
   revalidatePath("/buybacks");
   return { status: "saved", message: "Price saved." };
 }
 
+export async function removeBasePrice(formData: FormData): Promise<void> {
+  const { shopId } = await getActiveShop();
+  const { deviceModelId, storage } = textFields(formData, ["deviceModelId", "storage"]);
+  if (deviceModelId && storage) {
+    await forShop(shopId).buybacks.removeBasePrice(deviceModelId, storage);
+  }
+  revalidatePath("/buybacks");
+}
+
 export async function saveDeductions(_previous: FormState, formData: FormData): Promise<FormState> {
   const { shopId } = await getActiveShop();
-  const buybacks = forShop(shopId).buybacks;
+  const names = BUYBACK_QUESTIONS.flatMap((q) =>
+    ["yes", "no"].flatMap((answer) => [`${q.key}-${answer}-kind`, `${q.key}-${answer}-value`]),
+  );
+  const values = textFields(formData, names);
 
-  const rules: { key: (typeof BUYBACK_QUESTIONS)[number]["key"]; answer: boolean; kind: "amount" | "floor" | "none"; cents: number }[] = [];
-  const fieldErrors: Record<string, string> = {};
-  for (const question of BUYBACK_QUESTIONS) {
-    for (const answer of [true, false]) {
-      const name = `${question.key}-${answer ? "yes" : "no"}`;
-      const kind = String(formData.get(`${name}-kind`) ?? "none");
-      if (kind !== "none" && kind !== "amount" && kind !== "floor") {
-        fieldErrors[name] = "Choose none, deduct or fixed offer.";
-        continue;
-      }
-      if (kind === "none") {
-        rules.push({ key: question.key, answer, kind, cents: 0 });
-        continue;
-      }
-      const cents = parseEuros(String(formData.get(`${name}-value`) ?? ""));
-      if (cents === null) {
-        fieldErrors[name] = "Enter an amount, for example 25 or 12.50.";
-        continue;
-      }
-      rules.push({ key: question.key, answer, kind, cents });
-    }
-  }
-  if (Object.keys(fieldErrors).length > 0) return { status: "error", fieldErrors };
+  const parsed = parseDeductionsForm(values);
+  if (!parsed.ok) return { status: "error", fieldErrors: parsed.fieldErrors };
 
-  for (const rule of rules) {
-    if (rule.kind === "none") {
-      await buybacks.removeDeduction(rule.key, rule.answer);
-    } else {
-      await buybacks.setDeduction({
-        questionKey: rule.key,
-        answer: rule.answer,
-        kind: rule.kind,
-        value: rule.cents,
-      });
-    }
-  }
+  await forShop(shopId).buybacks.replaceDeductions(parsed.value);
   revalidatePath("/buybacks");
   return { status: "saved", message: "Deductions saved." };
 }
 
-export async function markQuoteReceived(formData: FormData): Promise<void> {
+export type ReceivedState = { message?: string };
+
+export async function markQuoteReceived(
+  _previous: ReceivedState,
+  formData: FormData,
+): Promise<ReceivedState> {
   const { shopId } = await getActiveShop();
-  const quoteId = String(formData.get("quoteId") ?? "");
-  if (quoteId) await forShop(shopId).buybacks.markReceived(quoteId);
+  const quoteId = parseQuoteId(formData.get("quoteId"));
+  if (!quoteId) return { message: "This quote was already updated." };
+
+  const updated = await forShop(shopId).buybacks.markReceived(quoteId);
   revalidatePath("/buybacks");
+  return updated ? {} : { message: "This quote was already updated." };
 }

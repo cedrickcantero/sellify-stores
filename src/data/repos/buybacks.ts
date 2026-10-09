@@ -49,11 +49,15 @@ export type OfferedBrand = {
 export type BuybackRepo = {
   upsertBasePrice(input: BasePriceRow): Promise<void>;
   getBasePrice(deviceModelId: string, storage: string): Promise<number | null>;
+  /** Stops buying one model and storage size. */
+  removeBasePrice(deviceModelId: string, storage: string): Promise<void>;
   listBasePrices(): Promise<BasePriceRow[]>;
   /** Brands and models the shop has a base price for, with those storages. */
   offeredModels(): Promise<OfferedBrand[]>;
   setDeduction(rule: BuybackDeduction): Promise<void>;
   removeDeduction(questionKey: BuybackQuestionKey, answer: boolean): Promise<void>;
+  /** Makes these the shop's only deduction rules, all or nothing. */
+  replaceDeductions(rules: BuybackDeduction[]): Promise<void>;
   listDeductions(): Promise<BuybackDeduction[]>;
   insertQuote(input: {
     deviceModelId: string;
@@ -124,6 +128,18 @@ export function buybackRepo(shopId: string): BuybackRepo {
       return rows[0]?.basePrice ?? null;
     },
 
+    async removeBasePrice(deviceModelId, storage) {
+      await db
+        .delete(buybackPrice)
+        .where(
+          and(
+            eq(buybackPrice.shopId, shopId),
+            eq(buybackPrice.deviceModelId, deviceModelId),
+            eq(buybackPrice.storage, storage),
+          ),
+        );
+    },
+
     async listBasePrices() {
       return db
         .select({
@@ -186,6 +202,15 @@ export function buybackRepo(shopId: string): BuybackRepo {
             eq(buybackDeduction.answer, answer),
           ),
         );
+    },
+
+    async replaceDeductions(rules) {
+      await db.transaction(async (tx) => {
+        await tx.delete(buybackDeduction).where(eq(buybackDeduction.shopId, shopId));
+        if (rules.length > 0) {
+          await tx.insert(buybackDeduction).values(rules.map((rule) => ({ shopId, ...rule })));
+        }
+      });
     },
 
     async listDeductions() {

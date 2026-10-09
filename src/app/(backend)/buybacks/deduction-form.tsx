@@ -44,10 +44,12 @@ function RuleRow({
   initial: RuleValue;
   error?: string;
 }) {
+  // Controlled, so a failed save keeps what was typed.
   const [kind, setKind] = useState(initial.kind);
+  const [euros, setEuros] = useState(initial.euros);
   return (
     <TableRow>
-      <TableCell className="font-medium">{label}</TableCell>
+      <TableCell>{label}</TableCell>
       <TableCell>
         <Field label={<span className="sr-only">Rule for {label}</span>}>
           <Select
@@ -64,7 +66,8 @@ function RuleRow({
             name={`${name}-value`}
             inputMode="decimal"
             placeholder="0.00"
-            defaultValue={initial.euros}
+            value={euros}
+            onChange={(event) => setEuros(event.target.value)}
             disabled={kind === "none"}
           />
         </Field>

@@ -3,7 +3,6 @@ import { getActiveShop } from "@/auth/session";
 import { deviceCatalog, forShop } from "@/data";
 import { answersSummary, formatEuros } from "@/domain/buyback-questions";
 import {
-  Button,
   Card,
   FilterBar,
   PageHeader,
@@ -16,9 +15,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/ui";
-import { markQuoteReceived } from "./actions";
 import { DeductionForm, ruleName, type RuleValues } from "./deduction-form";
 import { PriceForm } from "./price-form";
+import { MarkReceivedButton, RemovePriceButton } from "./row-actions";
 
 export const metadata: Metadata = { title: "Buybacks | Sellify" };
 
@@ -86,11 +85,14 @@ async function PricesView({ shopId }: { shopId: string }) {
               <TableHead>Device</TableHead>
               <TableHead>Storage</TableHead>
               <TableHead align="right">Base price</TableHead>
+              <TableHead>
+                <span className="sr-only">Actions</span>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {prices.length === 0 ? (
-              <TableEmpty colSpan={3}>No base prices yet. Set one to start buying.</TableEmpty>
+              <TableEmpty colSpan={4}>No base prices yet. Set one to start buying.</TableEmpty>
             ) : (
               prices.map((price) => {
                 const model = modelById.get(price.deviceModelId);
@@ -99,6 +101,13 @@ async function PricesView({ shopId }: { shopId: string }) {
                     <TableCell>{model ? `${model.brand} ${model.name}` : price.deviceModelId}</TableCell>
                     <TableCell>{price.storage}</TableCell>
                     <TableCell align="right">{formatEuros(price.basePrice)}</TableCell>
+                    <TableCell>
+                      <RemovePriceButton
+                        deviceModelId={price.deviceModelId}
+                        storage={price.storage}
+                        label={model ? `${model.brand} ${model.name}` : price.deviceModelId}
+                      />
+                    </TableCell>
                   </TableRow>
                 );
               })
@@ -156,12 +165,7 @@ async function QuotesView({ shopId }: { shopId: string }) {
               </TableCell>
               <TableCell>
                 {quote.status === "accepted" ? (
-                  <form action={markQuoteReceived}>
-                    <input type="hidden" name="quoteId" value={quote.id} />
-                    <Button type="submit" size="sm" variant="secondary">
-                      Mark received
-                    </Button>
-                  </form>
+                  <MarkReceivedButton quoteId={quote.id} />
                 ) : null}
               </TableCell>
             </TableRow>
