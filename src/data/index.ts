@@ -5,6 +5,7 @@ import { productRepo, type ProductRepo } from "./repos/products";
 import { db, type Tx } from "./db";
 import { repairsRepo, type RepairsRepo } from "./repos/repairs";
 import { customDomainRepo, type CustomDomainRepo } from "./repos/custom-domain";
+import { salesRepo, type SalesRepo } from "./repos/sales";
 import { shopRepo, type ShopRepo } from "./repos/shop";
 import { storeConfigRepo, type StoreConfigRepo } from "./repos/store-config";
 
@@ -46,6 +47,16 @@ export type { StoreConfigRepo, StoreConfigRow, StoreConfigVersion, StoredConfig 
 export type { CustomDomain, CustomDomainRepo, CustomDomainStatus } from "./repos/custom-domain";
 export { resolveShopByVerifiedHostname } from "./store-resolution";
 export { deleteStaleRateLimitBuckets, takeRateLimitToken } from "./rate-limit";
+export { decrementStock } from "./repos/sales";
+export type {
+  OnlineSaleInput,
+  SaleChannel,
+  SaleFilter,
+  SaleItem,
+  SalesRepo,
+  SaleStatus,
+  SaleWithItems,
+} from "./repos/sales";
 export { deleteOrganization, insertShop, isUniqueViolation, resolveShopBySlug } from "./shops";
 export { deviceCatalog, type DeviceModel } from "./device-catalog";
 export {
@@ -65,6 +76,7 @@ export type ShopRepos = {
   repairs: RepairsRepo;
   storeConfig: StoreConfigRepo;
   customDomains: CustomDomainRepo;
+  sales: SalesRepo;
 };
 
 export function forShop(shopId: string): ShopRepos {
@@ -76,6 +88,7 @@ export function forShop(shopId: string): ShopRepos {
     repairs: repairsRepo(shopId),
     storeConfig: storeConfigRepo(shopId),
     customDomains: customDomainRepo(shopId),
+    sales: salesRepo(shopId),
   };
 }
 
