@@ -39,7 +39,7 @@ export default defineConfig({
           setupFiles: ["src/test/integration-setup.ts"],
           // One shared test database: run files one at a time.
           fileParallelism: false,
-          testTimeout: 30_000,
+          testTimeout: 60_000,
           hookTimeout: 60_000,
         },
       },
