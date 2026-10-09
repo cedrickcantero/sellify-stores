@@ -15,15 +15,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/ui";
-import { BUYBACK_QUESTIONS, type BuybackQuestionKey } from "@/domain/buyback-questions";
+import { BUYBACK_QUESTIONS } from "@/domain/buyback-questions";
 import { saveDeductions, type FormState } from "./actions";
+import { ruleName } from "./rule-name";
 
 export type RuleValue = { kind: "none" | "amount" | "floor"; euros: string };
 export type RuleValues = Record<string, RuleValue>;
-
-export function ruleName(key: BuybackQuestionKey, answer: boolean) {
-  return `${key}-${answer ? "yes" : "no"}`;
-}
 
 const KIND_OPTIONS = [
   { value: "none", label: "No change" },

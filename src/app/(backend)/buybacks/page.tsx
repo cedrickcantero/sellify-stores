@@ -15,7 +15,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/ui";
-import { DeductionForm, ruleName, type RuleValues } from "./deduction-form";
+import { DeductionForm, type RuleValues } from "./deduction-form";
+import { ruleName } from "./rule-name";
 import { PriceForm } from "./price-form";
 import { MarkReceivedButton, RemovePriceButton } from "./row-actions";
 
