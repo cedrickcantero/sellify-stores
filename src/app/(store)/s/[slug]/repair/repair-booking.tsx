@@ -1,10 +1,10 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import type { OfferedRepairBrand } from "@/data";
 import { formatCents } from "@/domain/product";
 import { formatClock, formatDayLabel } from "@/domain/repair-slots";
-import { HoneypotField } from "@/store-ui";
+import { HoneypotField } from "@/store-ui/honeypot-field";
 import { bookRepairAction, loadSlotsAction, type BookingState } from "./actions";
 
 const IDLE: BookingState = { status: "idle" };
@@ -12,7 +12,7 @@ const IDLE: BookingState = { status: "idle" };
 const choice =
   "min-h-11 rounded-(--store-radius) border border-(--store-text)/25 px-4 py-2 text-left hover:border-(--store-primary) aria-pressed:border-(--store-primary) aria-pressed:bg-(--store-primary) aria-pressed:text-(--store-on-primary)";
 const input =
-  "min-h-11 w-full rounded-(--store-radius) border border-(--store-text)/40 bg-transparent px-3 py-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--store-primary)";
+  "min-h-11 aria-invalid:border-2 aria-invalid:border-(--store-primary) w-full rounded-(--store-radius) border border-(--store-text)/40 bg-transparent px-3 py-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--store-primary)";
 const primaryButton =
   "inline-flex min-h-11 items-center justify-center rounded-(--store-radius) bg-(--store-primary) px-6 py-2 font-semibold text-(--store-on-primary) disabled:opacity-50";
 
@@ -24,45 +24,87 @@ type Props = {
   lastDate: string;
 };
 
+type SlotsState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "ready"; slots: string[] }
+  | { kind: "limited" }
+  | { kind: "error" };
+
 export function RepairBooking({ slug, brands, timezone, firstDate, lastDate }: Props) {
   const [brandName, setBrandName] = useState<string | null>(null);
   const [modelId, setModelId] = useState<string | null>(null);
   const [repairId, setRepairId] = useState<string | null>(null);
   const [date, setDate] = useState(firstDate);
-  const [slots, setSlots] = useState<string[] | null>(null);
+  const [slots, setSlots] = useState<SlotsState>({ kind: "idle" });
   const [slotStart, setSlotStart] = useState<string | null>(null);
-  const [, startTransition] = useTransition();
+  // The slot-taken message lives outside the form, which unmounts when the slot is cleared.
+  const [notice, setNotice] = useState<string | null>(null);
+  // Which slot the last form error belongs to, so it never shows for another pick.
+  const [errorSlot, setErrorSlot] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  // The repair and day the slot list on screen was asked for; a response for
+  // anything else arrived late and is dropped.
+  const wanted = useRef<string | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  function refreshSlots(repairPriceId: string, day: string) {
+    const key = `${repairPriceId}|${day}`;
+    wanted.current = key;
+    setSlots({ kind: "loading" });
+    loadSlotsAction(slug, repairPriceId, day).then(
+      (result) => {
+        if (wanted.current !== key) return;
+        if (result.ok) setSlots({ kind: "ready", slots: result.slots });
+        else setSlots({ kind: result.reason === "rate_limited" ? "limited" : "error" });
+      },
+      () => {
+        if (wanted.current === key) setSlots({ kind: "error" });
+      },
+    );
+  }
+
+  function clearSlots() {
+    wanted.current = null;
+    setSlots({ kind: "idle" });
+  }
+
   const [state, formAction, pending] = useActionState(async (prev: BookingState, form: FormData) => {
     const next = await bookRepairAction(slug, prev, form);
+    setErrorSlot(String(form.get("slotStart") ?? ""));
+    setAttempt((n) => n + 1);
     // A clash or a slot that has passed: ask for another slot and refresh the list.
     if (next.status === "error" && next.slotTaken) {
       setSlotStart(null);
-      setSlots(await loadSlotsAction(slug, String(form.get("repairPriceId") ?? ""), date));
+      setNotice(next.message);
+      if (repairId) refreshSlots(repairId, date);
     }
     return next;
   }, IDLE);
+
+  useEffect(() => {
+    if (state.status === "error" && state.fieldErrors) {
+      formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+    }
+  }, [state]);
 
   const brand = brands.find((b) => b.brand === brandName);
   const model = brand?.models.find((m) => m.deviceModelId === modelId);
   const repair = model?.repairs.find((r) => r.repairPriceId === repairId);
 
-  function refreshSlots(repairPriceId: string, day: string) {
-    setSlots(null);
-    startTransition(async () => {
-      setSlots(await loadSlotsAction(slug, repairPriceId, day));
-    });
-  }
-
   function pickRepair(id: string) {
     setRepairId(id);
     setSlotStart(null);
+    setNotice(null);
     refreshSlots(id, date);
   }
 
   function pickDate(day: string) {
     setDate(day);
     setSlotStart(null);
+    setNotice(null);
     if (repairId && day >= firstDate && day <= lastDate) refreshSlots(repairId, day);
+    else clearSlots();
   }
 
   if (state.status === "booked") {
@@ -79,8 +121,10 @@ export function RepairBooking({ slug, brands, timezone, firstDate, lastDate }: P
     );
   }
 
-  const errors = state.status === "error" ? (state.fieldErrors ?? {}) : {};
-  const values = state.status === "error" ? state.values : undefined;
+  // A form error belongs to the slot it was made for.
+  const formError = state.status === "error" && !state.slotTaken && errorSlot === slotStart ? state : null;
+  const errors = formError?.fieldErrors ?? {};
+  const values = formError?.values;
   const sameDay = repair !== undefined && repair.partQty > 0;
 
   return (
@@ -98,7 +142,7 @@ export function RepairBooking({ slug, brands, timezone, firstDate, lastDate }: P
                 setBrandName(b.brand);
                 setModelId(null);
                 setRepairId(null);
-                setSlots(null);
+                clearSlots();
                 setSlotStart(null);
               }}
             >
@@ -121,7 +165,7 @@ export function RepairBooking({ slug, brands, timezone, firstDate, lastDate }: P
                 onClick={() => {
                   setModelId(m.deviceModelId);
                   setRepairId(null);
-                  setSlots(null);
+                  clearSlots();
                   setSlotStart(null);
                 }}
               >
@@ -175,36 +219,53 @@ export function RepairBooking({ slug, brands, timezone, firstDate, lastDate }: P
               max={lastDate}
               onChange={(e) => pickDate(e.target.value)}
             />
-            <div aria-live="polite" className="flex flex-wrap gap-2">
-              {slots === null ? (
+            <div aria-live="polite" className="flex flex-wrap items-center gap-2">
+              {slots.kind === "loading" ? (
                 <p className="text-(--store-text)/75">Loading times...</p>
-              ) : slots.length === 0 ? (
+              ) : slots.kind === "limited" ? (
+                <p className="text-(--store-text)/75">Too many requests. Wait a minute, then try again.</p>
+              ) : slots.kind === "error" ? (
+                <>
+                  <p className="text-(--store-text)/75">We could not load the times.</p>
+                  <button type="button" className={choice} onClick={() => refreshSlots(repair.repairPriceId, date)}>
+                    Try again
+                  </button>
+                </>
+              ) : slots.kind === "ready" && slots.slots.length === 0 ? (
                 <p className="text-(--store-text)/75">No times free on this day. Pick another day.</p>
-              ) : (
-                slots.map((s) => (
+              ) : slots.kind === "ready" ? (
+                slots.slots.map((s) => (
                   <button
                     key={s}
                     type="button"
                     className={choice}
                     aria-pressed={s === slotStart}
-                    onClick={() => setSlotStart(s)}
+                    onClick={() => {
+                      setNotice(null);
+                      setSlotStart(s);
+                    }}
                   >
                     {formatClock(s, timezone)}
                   </button>
                 ))
-              )}
+              ) : null}
             </div>
+            {notice ? (
+              <p role="alert" className="font-semibold">
+                {notice}
+              </p>
+            ) : null}
           </div>
 
           {slotStart ? (
-            <form action={formAction} className="relative flex max-w-md flex-col gap-4" noValidate>
+            <form ref={formRef} action={formAction} className="relative flex max-w-md flex-col gap-4" noValidate>
               <h2 className="font-(family-name:--store-font-heading) text-xl font-bold">5. Your details</h2>
               <input type="hidden" name="repairPriceId" value={repair.repairPriceId} />
               <input type="hidden" name="slotStart" value={slotStart} />
               <HoneypotField />
-              {state.status === "error" ? (
-                <p role="alert" className="font-semibold">
-                  {state.message}
+              {formError ? (
+                <p key={attempt} role="alert" className="font-semibold">
+                  {formError.message}
                 </p>
               ) : null}
               <Field name="name" label="Name" autoComplete="name" error={errors.name} defaultValue={values?.name} />

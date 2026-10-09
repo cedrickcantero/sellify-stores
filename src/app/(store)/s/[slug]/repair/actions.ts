@@ -1,6 +1,7 @@
 "use server";
 
 import { headers } from "next/headers";
+import { z } from "zod";
 import { BookingCustomer } from "@/domain/repair-booking";
 import { clientIp, isHoneypotTripped, rateLimit } from "@/services/abuse";
 import { bookRepair, listSlots } from "@/services/repair-booking";
@@ -32,13 +33,29 @@ function text(form: FormData, name: string): string {
   return typeof value === "string" ? value : "";
 }
 
+const SlotsInput = z.object({
+  repairPriceId: z.string().min(1).max(64),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+const BookingInput = z.object({
+  repairPriceId: z.string().min(1).max(64),
+  slotStart: z.string().min(1).max(40),
+});
+
+export type SlotsResult = { ok: true; slots: string[] } | { ok: false; reason: "rate_limited" | "invalid" };
+
 // Free slots for one repair on one day. Rate limited per IP so the slot
 // list cannot be used to hammer the database.
-export async function loadSlotsAction(slug: string, repairPriceId: string, date: string): Promise<string[]> {
+export async function loadSlotsAction(slug: string, repairPriceId: string, date: string): Promise<SlotsResult> {
   const { shopId } = await requireLiveStore(slug, "repair");
+  const input = SlotsInput.safeParse({ repairPriceId, date });
+  if (!input.success) return { ok: false, reason: "invalid" };
   const ip = clientIp(await headers());
-  if (!(await rateLimit(`slots:ip:${ip}`, { capacity: 60, refillPerMinute: 30 }))) return [];
-  return listSlots(shopId, String(repairPriceId), String(date));
+  if (!(await rateLimit(`slots:ip:${ip}`, { capacity: 60, refillPerMinute: 30 }))) {
+    return { ok: false, reason: "rate_limited" };
+  }
+  return { ok: true, slots: await listSlots(shopId, input.data.repairPriceId, input.data.date) };
 }
 
 export async function bookRepairAction(slug: string, _prev: BookingState, form: FormData): Promise<BookingState> {
@@ -48,11 +65,9 @@ export async function bookRepairAction(slug: string, _prev: BookingState, form: 
   // A bot filled the hidden field: look like a success, book nothing.
   if (isHoneypotTripped(form)) return { status: "booked", ticketId: "", slotStart: text(form, "slotStart") };
 
-  const ip = clientIp(await headers());
-  if (!(await rateLimit(`book:ip:${ip}`, { capacity: 5, refillPerMinute: 1 }))) {
-    return { status: "error", message: MESSAGES.tooMany, values };
-  }
-
+  // Validate everything before taking a rate limit token.
+  const ids = BookingInput.safeParse({ repairPriceId: text(form, "repairPriceId"), slotStart: text(form, "slotStart") });
+  if (!ids.success) return { status: "error", message: MESSAGES.notOffered, values };
   const parsed = BookingCustomer.safeParse(values);
   if (!parsed.success) {
     const fieldErrors: Partial<Record<"name" | "phone" | "email", string>> = {};
@@ -63,9 +78,14 @@ export async function bookRepairAction(slug: string, _prev: BookingState, form: 
     return { status: "error", message: "Check the highlighted fields.", fieldErrors, values };
   }
 
-  const slotStart = text(form, "slotStart");
+  const ip = clientIp(await headers());
+  if (!(await rateLimit(`book:ip:${ip}`, { capacity: 5, refillPerMinute: 1 }))) {
+    return { status: "error", message: MESSAGES.tooMany, values };
+  }
+
+  const { slotStart } = ids.data;
   const result = await bookRepair(shopId, {
-    repairPriceId: text(form, "repairPriceId"),
+    repairPriceId: ids.data.repairPriceId,
     slotStart,
     customer: parsed.data,
   });

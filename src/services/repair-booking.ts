@@ -3,7 +3,7 @@ import { forShop, inTransaction, SlotTakenError } from "@/data";
 import type { Mailer } from "@/domain/email";
 import { safeHtml } from "@/domain/email-html";
 import { formatCents } from "@/domain/product";
-import { bookingWindow, formatSlotLabel, generateSlots, slotDate } from "@/domain/repair-slots";
+import { bookingWindow, formatClock, formatDayLabel, formatSlotLabel, generateSlots, slotDate } from "@/domain/repair-slots";
 import { err, ok, type Result } from "@/domain/result";
 import type { StoreConfig } from "@/domain/store-config";
 import { sendEmail } from "@/email";
@@ -108,7 +108,11 @@ export async function bookRepair(
   }
 
   // The ticket is committed; a failed email never undoes it (sendEmail never throws).
-  await sendBookingEmails(shopId, offer, input.slotStart, input.customer, deps.mailer);
+  try {
+    await sendBookingEmails(shopId, offer, input.slotStart, input.customer, deps.mailer);
+  } catch (error) {
+    console.error("Repair booking emails failed after the ticket was saved.", error);
+  }
   return ok({ ticketId });
 }
 
@@ -121,6 +125,7 @@ async function sendBookingEmails(
 ): Promise<void> {
   const when = formatSlotLabel(slotStart, offer.timezone);
   const what = `${offer.price.modelName} ${offer.price.repairType}`;
+  const day = `${formatDayLabel(slotStart, offer.timezone)} at ${formatClock(slotStart, offer.timezone)}`;
   const price = formatCents(offer.price.price);
 
   let shopTo = offer.config.contact.email;
@@ -133,7 +138,7 @@ async function sendBookingEmails(
         to: customer.email,
         subject: `Your repair is booked: ${what}, ${when}`,
         kind: "repair_booked_customer",
-        html: safeHtml`<p>Hi ${customer.name},</p><p>Your ${what} repair is booked for ${when} at ${offer.config.brand.name}.</p><p>Price: ${price}</p>`,
+        html: safeHtml`<p>Hi ${customer.name},</p><p>Your ${what} repair is booked for ${day}.</p><p>See you at ${offer.config.brand.name}.</p><p>Price: ${price}</p>`,
       },
       mailer,
     ),
@@ -146,7 +151,7 @@ async function sendBookingEmails(
           to: shopTo,
           subject: `New repair booking: ${what}, ${when}, ${customer.name}`,
           kind: "repair_booked_shop",
-          html: safeHtml`<p>New repair booking: ${what}, ${when}.</p><p>Customer: ${customer.name}</p><p>Phone: ${customer.phone}</p><p>Email: ${customer.email}</p><p>Price: ${price}</p>`,
+          html: safeHtml`<p>New repair booking: ${what}, ${day}.</p><p>Customer: ${customer.name}</p><p>Phone: ${customer.phone}</p><p>Email: ${customer.email}</p><p>Price: ${price}</p>`,
         },
         mailer,
       ),

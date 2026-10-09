@@ -99,6 +99,8 @@ describe("bookRepair", () => {
     });
     expect(customerEmail).toMatchObject({ recipient: "john@example.com", status: "sent" });
     expect(customerEmail?.body).toContain("€89.00");
+    expect(customerEmail?.body).toContain("Thursday 10 January at 10am");
+    expect(shopEmail?.body).toContain("Thursday 10 January at 10am");
   });
 
   it("sends the shop email to the owner when the store has no contact email", async () => {
