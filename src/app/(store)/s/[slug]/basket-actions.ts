@@ -83,3 +83,10 @@ export async function removeFromBasket(slug: string, productId: string): Promise
     lines.filter((line) => line.productId !== productId),
   );
 }
+
+// Empties this shop's basket after an order is confirmed.
+export async function clearBasket(slug: string): Promise<void> {
+  if (!basketIdSchema.safeParse(slug).success) return;
+  const { shopId } = await requireLiveStore(slug, "shop");
+  await writeCart(shopId, []);
+}

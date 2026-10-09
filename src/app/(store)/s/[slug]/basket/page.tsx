@@ -1,28 +1,38 @@
 import Link from "next/link";
-import { cartTotals } from "@/domain/cart";
+import { basketAdjusted, cartTotals } from "@/domain/cart";
 import { formatCents } from "@/domain/product";
 import { loadBasket } from "@/services/cart";
 import { storeHref } from "@/store-ui/store-href";
 import { QuantityForm } from "@/store-ui/basket-forms";
-import { Heading, ProductImage, storeButtonClass, storeSecondaryButtonClass } from "@/store-ui/product-views";
+import { CheckoutForm } from "@/store-ui/checkout-forms";
+import { Heading, ProductImage, storeSecondaryButtonClass } from "@/store-ui/product-views";
 import { removeFromBasket, setBasketQty } from "../basket-actions";
+import { startCheckout } from "../checkout/actions";
 import { requireLiveStore } from "../store-context";
 
 export const dynamic = "force-dynamic";
 
-export default async function StoreBasketPage({ params }: PageProps<"/s/[slug]/basket">) {
+export default async function StoreBasketPage({ params, searchParams }: PageProps<"/s/[slug]/basket">) {
   const { slug } = await params;
+  const { stock } = await searchParams;
   const { shopId, basePath, preview } = await requireLiveStore(slug, "shop");
   // What can be bought right now: quantities capped at current stock, prices
   // from the database.
   const { saved, lines, products } = await loadBasket(shopId);
   const { lines: priced, total } = cartTotals(lines, products);
-  const adjusted = saved.length !== lines.length || saved.some((line, i) => line.qty !== lines[i]?.qty);
+  const adjusted = basketAdjusted(saved, lines);
+  // Checkout found something had run out and updated the basket: nothing was charged.
+  const soldOutAtCheckout = stock === "changed";
 
   return (
     <div className="flex flex-col gap-6">
       <Heading>Your basket</Heading>
-      {adjusted ? (
+      {soldOutAtCheckout ? (
+        <p role="status" className="rounded-(--store-radius) border border-(--store-text)/40 p-3">
+          Sorry, something in your basket sold out before you could pay. We updated your basket and you have not been
+          charged. Check it, then check out again.
+        </p>
+      ) : adjusted ? (
         <p role="status" className="rounded-(--store-radius) border border-(--store-text)/40 p-3">
           Some items changed because stock changed. Check your basket before you continue.
         </p>
@@ -67,10 +77,7 @@ export default async function StoreBasketPage({ params }: PageProps<"/s/[slug]/b
             <p className="text-xl">
               Total <strong className="ml-2 text-2xl">{formatCents(total)}</strong>
             </p>
-            {/* Placeholder: checkout arrives with the checkout ticket. */}
-            <button type="button" disabled className={`${storeButtonClass} w-full sm:w-auto`}>
-              Checkout (coming soon)
-            </button>
+            <CheckoutForm action={startCheckout.bind(null, slug)} />
           </div>
         </>
       )}

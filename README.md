@@ -60,6 +60,8 @@ can take longer than 250ms and was failing intermittently with ETIMEDOUT.
 | `BLOB_READ_WRITE_TOKEN` | Vercel Blob token for logo and product image uploads. |
 | `RESEND_API_KEY` | Resend API key for sending email. Unset: `sendEmail` records the email as `failed` with a clear error and never throws. |
 | `EMAIL_FROM` | Sender address for all email, on a domain verified in Resend. |
+| `STRIPE_SECRET_KEY` | Stripe test-mode secret key (`sk_test_...`) for creating Checkout sessions. Read only when a customer checks out: unset, checkout shows "not available" and every other page works. |
+| `STRIPE_WEBHOOK_SECRET` | Signing secret for `POST /api/stripe/webhook` (`whsec_...`). Locally it is the one `stripe listen --print-secret` prints; on Vercel it is the endpoint's secret from the Stripe dashboard. Unset: the webhook answers 500 with a clear message. |
 | `APP_HOST` | Host that serves the backend. `localhost` and `*.vercel.app` always count as the app host too. |
 | `STORE_ROOT_DOMAIN` | Optional. Root domain whose subdomains serve stores (`<slug>.<root>`). Without it, stores are served at `/s/<slug>`. |
 | `RATE_LIMIT_DISABLED` | Optional, tests only. `1` turns `rateLimit` off so suites that sign up and log in repeatedly are not refused. Ignored when `NODE_ENV=production` and on Vercel. The local Playwright server sets it. |

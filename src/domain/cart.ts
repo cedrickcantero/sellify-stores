@@ -92,3 +92,8 @@ export function parseQtyInput(value: unknown): number | null {
   const parsed = qtyInputSchema.safeParse(value);
   return parsed.success ? parsed.data : null;
 }
+
+// True when the basket as saved differs from what can be bought now.
+export function basketAdjusted(saved: CartLine[], lines: CartLine[]): boolean {
+  return saved.length !== lines.length || saved.some((line, i) => line.qty !== lines[i]?.qty);
+}

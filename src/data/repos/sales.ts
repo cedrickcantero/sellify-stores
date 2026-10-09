@@ -69,6 +69,8 @@ export type SalesRepo = {
     ids: string[],
     options?: { includeArchived?: boolean },
   ): Promise<{ id: string; title: string; price: number }[]>;
+  /** This shop's online sale for a Stripe session id, or null. */
+  findByStripeSession(stripeSessionId: string): Promise<SaleWithItems | null>;
   /** Flags a sale of this shop as paid but not fulfilled. */
   markNeedsRefund(tx: Tx, saleId: string): Promise<void>;
 };
@@ -216,6 +218,29 @@ export function salesRepo(shopId: string): SalesRepo {
         )
         .orderBy(product.id)
         .for("update");
+    },
+
+    async findByStripeSession(stripeSessionId) {
+      const [row] = await db
+        .select()
+        .from(sale)
+        .where(and(eq(sale.shopId, shopId), eq(sale.stripeSessionId, stripeSessionId)))
+        .limit(1);
+      if (!row) return null;
+      const lines = await db.select().from(saleItem).where(eq(saleItem.saleId, row.id)).orderBy(saleItem.id);
+      return {
+        id: row.id,
+        channel: row.channel,
+        total: row.total,
+        status: row.status,
+        createdAt: row.createdAt,
+        items: lines.map((line) => ({
+          productId: line.productId,
+          title: line.titleSnapshot,
+          quantity: line.quantity,
+          unitPrice: line.unitPriceSnapshot,
+        })),
+      };
     },
 
     async markNeedsRefund(tx, saleId) {
