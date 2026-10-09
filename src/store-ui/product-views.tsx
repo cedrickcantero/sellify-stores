@@ -1,5 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { storeHref } from "./store-href";
+import { AddToBasketForm } from "./basket-forms";
 import { CONDITION_LABELS, formatCents, type ProductCondition } from "@/domain/product";
 
 export type ProductView = {
@@ -52,7 +54,7 @@ export function ProductGrid({
   products: ProductView[];
   basePath: string;
   /** Returns the form action that adds this product to the basket. */
-  addAction: (productId: string) => () => Promise<void>;
+  addAction: (productId: string) => (previous: { message?: string }, formData: FormData) => Promise<{ message?: string }>;
 }) {
   return (
     <ul className="grid grid-cols-1 gap-6 min-[480px]:grid-cols-2 lg:grid-cols-3">
@@ -62,7 +64,7 @@ export function ProductGrid({
           className="flex flex-col overflow-hidden rounded-(--store-radius) border border-(--store-text)/15"
         >
           <Link
-            href={`${basePath}/shop/${product.id}`}
+            href={storeHref(basePath, `/shop/${product.id}`)}
             className="flex flex-col focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--store-primary)"
           >
             <ProductImage product={product} className="aspect-4/3 w-full" />
@@ -76,11 +78,7 @@ export function ProductGrid({
             <p className="text-sm">
               <StockNote product={product} />
             </p>
-            <form action={addAction(product.id)} className="mt-auto">
-              <button type="submit" disabled={product.soldOut} className={`${storeButtonClass} w-full`}>
-                {product.soldOut ? "Sold out" : "Add to basket"}
-              </button>
-            </form>
+            <AddToBasketForm action={addAction(product.id)} soldOut={product.soldOut} className="mt-auto" />
           </div>
         </li>
       ))}

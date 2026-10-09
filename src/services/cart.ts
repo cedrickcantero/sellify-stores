@@ -1,6 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
-import { parseCart, serializeCart, type CartLine } from "@/domain/cart";
+import { clampToStock, parseCart, serializeCart, type CartLine } from "@/domain/cart";
+import { listStoreProducts, type StoreProduct } from "@/services/store-products";
 
 export type { CartLine };
 
@@ -12,6 +13,23 @@ export function cartCookieName(shopId: string): string {
 
 export async function readCart(shopId: string): Promise<CartLine[]> {
   return parseCart((await cookies()).get(cartCookieName(shopId))?.value);
+}
+
+// The basket as it can be bought right now: the cookie's lines checked
+// against this shop's active products, quantities capped at current stock.
+// Archived, sold out, other shops' and forged lines are dropped. The basket
+// page, the nav badge, every basket action and checkout all use this, so
+// they always agree. `saved` is the raw cookie, `products` the shop's
+// active products read in the same call (for pricing).
+export async function loadBasket(
+  shopId: string,
+): Promise<{ saved: CartLine[]; lines: CartLine[]; products: StoreProduct[] }> {
+  const [saved, products] = await Promise.all([readCart(shopId), listStoreProducts(shopId)]);
+  return { saved, lines: clampToStock(saved, products), products };
+}
+
+export async function readBuyableCart(shopId: string): Promise<CartLine[]> {
+  return (await loadBasket(shopId)).lines;
 }
 
 // Server actions and route handlers only (cookies are read-only while rendering).

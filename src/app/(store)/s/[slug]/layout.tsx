@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { readCart } from "@/services/cart";
+import { readBuyableCart } from "@/services/cart";
 import { StoreOffline, StoreShell } from "@/store-ui";
 import { loadStore } from "./store-context";
 
@@ -25,7 +25,7 @@ export default async function StoreLayout({ children, params }: LayoutProps<"/s/
   if (store.storefront.status === "offline") return <StoreOffline brand={store.storefront.brand} />;
 
   const basketCount = store.storefront.config.tabs.shop
-    ? (await readCart(store.shopId)).reduce((sum, line) => sum + line.qty, 0)
+    ? (await readBuyableCart(store.shopId)).reduce((sum, line) => sum + line.qty, 0)
     : undefined;
 
   return (

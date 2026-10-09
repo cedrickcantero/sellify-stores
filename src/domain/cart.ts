@@ -77,3 +77,18 @@ export function cartTotals<P extends { id: string; price: number }>(
   });
   return { lines: priced, total: priced.reduce((sum, line) => sum + line.lineTotal, 0) };
 }
+
+// Input checks for the basket actions. The browser sends text, so a quantity
+// must be plain digits: empty, decimals, signs and exponents are refused.
+export const basketIdSchema = z.string().min(1).max(100);
+
+const qtyInputSchema = z
+  .string()
+  .regex(/^\d+$/)
+  .transform(Number)
+  .pipe(z.number().int().min(MIN_LINE_QTY).max(MAX_LINE_QTY));
+
+export function parseQtyInput(value: unknown): number | null {
+  const parsed = qtyInputSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}

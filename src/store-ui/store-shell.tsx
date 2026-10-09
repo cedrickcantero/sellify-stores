@@ -1,3 +1,4 @@
+import { storeHref } from "./store-href";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { StoreConfig } from "@/domain/store-config";
@@ -11,13 +12,7 @@ export const STORE_TABS: StoreTab[] = [
   { key: "sell", label: "Sell", path: "/sell" },
 ];
 
-// Internal store links. In a preview they keep ?preview so the next page is
-// also asked for as a preview; the server alone decides whether that shows
-// the draft (members only), so the flag grants nothing.
-export function storeHref(basePath: string, path: string, preview = false): string {
-  const href = `${basePath}${path}` || "/";
-  return preview ? `${href}?preview` : href;
-}
+export { storeHref };
 
 function StoreLogo({ brand }: { brand: StoreConfig["brand"] }) {
   if (!brand.logoUrl) return null;
@@ -74,7 +69,7 @@ export function StoreShell({
           </Link>
           {tabs.length > 0 ? (
             <nav aria-label="Store">
-              <ul className="flex gap-1">
+              <ul className="flex flex-wrap gap-1">
                 {tabs.map((tab) => (
                   <li key={tab.key}>
                     <Link
@@ -88,7 +83,7 @@ export function StoreShell({
                 {config.tabs.shop && basketCount !== undefined ? (
                   <li>
                     <Link
-                      href={storeHref(basePath, "/basket")}
+                      href={storeHref(basePath, "/basket", preview)}
                       className="inline-flex h-10 items-center rounded-(--store-radius) px-4 font-semibold hover:bg-(--store-primary) hover:text-(--store-on-primary)"
                     >
                       Basket{basketCount > 0 ? <span className="ml-1">({basketCount})</span> : null}

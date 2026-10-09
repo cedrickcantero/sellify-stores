@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { cartTotals, clampToStock, MAX_CART_LINES, parseCart, serializeCart, setLineQty } from "./cart";
+import {
+  basketIdSchema,
+  cartTotals,
+  clampToStock,
+  MAX_CART_LINES,
+  parseCart,
+  parseQtyInput,
+  serializeCart,
+  setLineQty,
+} from "./cart";
 
 const phone = { id: "p1", price: 34950, title: "Phone" };
 const case_ = { id: "p2", price: 1999, title: "Case" };
@@ -120,5 +129,23 @@ describe("parseCart", () => {
 
     const many = JSON.stringify(Array.from({ length: 30 }, (_, i) => ({ productId: `p${i}`, qty: 1 })));
     expect(parseCart(many)).toHaveLength(MAX_CART_LINES);
+  });
+});
+
+describe("basket input schemas", () => {
+  it("accepts a whole quantity from 1 to 99", () => {
+    expect(parseQtyInput("1")).toBe(1);
+    expect(parseQtyInput("99")).toBe(99);
+  });
+
+  it.each(["", "  ", "0", "100", "-1", "2.5", "abc", "1e2", null, undefined])("rejects %j", (value) => {
+    expect(parseQtyInput(value)).toBeNull();
+  });
+
+  it("accepts a slug and product id up to 100 characters and rejects empty or longer", () => {
+    expect(basketIdSchema.safeParse("a".repeat(100)).success).toBe(true);
+    expect(basketIdSchema.safeParse("").success).toBe(false);
+    expect(basketIdSchema.safeParse("a".repeat(101)).success).toBe(false);
+    expect(basketIdSchema.safeParse(5).success).toBe(false);
   });
 });
