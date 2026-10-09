@@ -12,6 +12,11 @@ describe("security headers", () => {
     expect(header(false, "X-Content-Type-Options")).toBe("nosniff");
   });
 
+  it("enforces the content security policy", () => {
+    expect(header(false, "Content-Security-Policy")).toBe(contentSecurityPolicy(false));
+    expect(header(false, "Content-Security-Policy-Report-Only")).toBeUndefined();
+  });
+
   it("allows eval only on the dev server", () => {
     expect(contentSecurityPolicy(false)).not.toContain("unsafe-eval");
     expect(contentSecurityPolicy(true)).toContain("'unsafe-eval'");

@@ -23,9 +23,9 @@ export function contentSecurityPolicy(dev: boolean): string {
   ].join("; ");
 }
 
-// Report-only while the policy is first checked against the live site;
-// switch to enforcing once a full click-through shows no violations.
-export const ENFORCE_CSP = false;
+// Enforced after a report-only run on the live site showed no violations
+// from the app (store pages, slot lookup, Stripe redirect, photo upload).
+export const ENFORCE_CSP = true;
 
 export function securityHeaders(dev: boolean): { key: string; value: string }[] {
   return [
