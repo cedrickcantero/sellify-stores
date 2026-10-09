@@ -13,11 +13,11 @@ export type DashboardSummary = {
   salesToday: { count: number; total: number };
   /** The next booked repairs from now, soonest first (at most five). */
   upcomingRepairs: RepairTicket[];
-  /** How many booked repairs are upcoming, beyond the five listed. */
+  /** How many booked repairs are upcoming, including the five listed. */
   upcomingRepairCount: number;
   /** The newest accepted buyback quotes not yet received (at most five). */
   pendingBuybacks: BuybackQuoteListItem[];
-  /** How many accepted quotes are waiting, beyond the five listed. */
+  /** How many accepted quotes are waiting, including the five listed. */
   pendingBuybackCount: number;
   /**
    * `published` is whether the store was ever published. The address is set
