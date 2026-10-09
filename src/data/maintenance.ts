@@ -71,6 +71,10 @@ export async function seedDeviceCatalog(url: string): Promise<number> {
 const RESET_TABLES = [
   "email_outbox",
   "product",
+  "store_config_version",
+  "store_config",
+  "custom_domain",
+  "rate_limit_bucket",
   "shop",
   "invitation",
   "member",

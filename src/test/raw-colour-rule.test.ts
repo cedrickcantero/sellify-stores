@@ -71,6 +71,13 @@ describe("raw colour rule", () => {
     expect(errors).toEqual([]);
   });
 
+  it("does not apply to the store surface, which takes colours from its config", async () => {
+    expect(
+      await rawColourErrors(page('<p className="bg-(--store-bg) text-white">Hi</p>'), "src/app/(store)/s/[slug]/page.tsx"),
+    ).toEqual([]);
+    expect(await rawColourErrors('export const dark = "#111111";\n', "src/store-ui/theme.ts")).toEqual([]);
+  });
+
   it("does not apply outside the backend surface", async () => {
     const errors = await rawColourErrors(
       'export const primary = "#0F766E";\n',

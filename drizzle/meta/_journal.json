@@ -36,6 +36,13 @@
       "when": 1791526189247,
       "tag": "0004_t5_repairs",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791526885830,
+      "tag": "0005_t8_store_foundation",
+      "breakpoints": true
     }
   ]
 }

@@ -44,6 +44,7 @@ const RAW_COLOUR = [
 const RAW_COLOUR_MESSAGE =
   "Raw colour. Use a Sellify token class (bg-primary, text-muted-foreground, border-border, ...) or a ui component. See docs/brand/sellify.md.";
 const BACKEND_SURFACE = ["src/app/(backend)/**/*.{ts,tsx}", "src/app/(auth)/**/*.{ts,tsx}", "src/ui/**/*.{ts,tsx}"];
+const STORE_SURFACE = ["src/app/(store)/**/*.{ts,tsx}", "src/store-ui/**/*.{ts,tsx}"];
 
 const eslintConfig = defineConfig([
   ...nextVitals,
@@ -59,6 +60,27 @@ const eslintConfig = defineConfig([
     files: ["scripts/**/*.{js,mjs,cjs,ts,mts,cts}", "src/test/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-imports": ["error", dataBoundary(MAINTENANCE)],
+    },
+  },
+  // The store surface is styled only from each store's own config
+  // (var(--store-*)), so it may not use the Sellify ui components. The raw
+  // colour rule below does not apply to it; it has no Sellify tokens to use.
+  {
+    files: STORE_SURFACE,
+    ignores: ["**/*.test.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            ...dataBoundary([]).patterns,
+            {
+              group: ["@/ui", "@/ui/*", "**/ui", "**/ui/*"],
+              message: "The store surface does not use the Sellify ui. Use @/store-ui and var(--store-*) styles.",
+            },
+          ],
+        },
+      ],
     },
   },
   {

@@ -44,6 +44,17 @@ describe("uploadImage", () => {
     expect(result.ok).toBe(true);
   });
 
+  it("stores an SVG logo only after removing script from it", async () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"><script>alert(2)</script><rect width="4"/></svg>';
+    const result = await uploadImage(SHOP_ID, new File([svg], "logo.svg", { type: "image/svg+xml" }));
+
+    expect(result.ok).toBe(true);
+    const [, body, options] = put.mock.calls[0];
+    expect(String(body)).toBe('<svg xmlns="http://www.w3.org/2000/svg"><rect width="4"/></svg>');
+    expect(options).toMatchObject({ contentType: "image/svg+xml" });
+  });
+
   it("accepts a file of exactly 2 MB", async () => {
     const result = await uploadImage(SHOP_ID, fileOf(PNG_HEADER, MAX_IMAGE_BYTES, "big.png", "image/png"));
     expect(result.ok).toBe(true);

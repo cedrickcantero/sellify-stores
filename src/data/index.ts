@@ -4,7 +4,9 @@ import { emailOutboxRepo, type EmailOutboxRepo } from "./repos/email-outbox";
 import { productRepo, type ProductRepo } from "./repos/products";
 import { db, type Tx } from "./db";
 import { repairsRepo, type RepairsRepo } from "./repos/repairs";
+import { customDomainRepo, type CustomDomainRepo } from "./repos/custom-domain";
 import { shopRepo, type ShopRepo } from "./repos/shop";
+import { storeConfigRepo, type StoreConfigRepo } from "./repos/store-config";
 
 export type {
   Product,
@@ -40,6 +42,10 @@ export {
   type TicketFilter,
 } from "./repos/repairs";
 export type { DbExecutor, Tx } from "./db";
+export type { StoreConfigRepo, StoreConfigRow, StoreConfigVersion, StoredConfig } from "./repos/store-config";
+export type { CustomDomain, CustomDomainRepo, CustomDomainStatus } from "./repos/custom-domain";
+export { resolveShopByVerifiedHostname } from "./store-resolution";
+export { takeRateLimitToken } from "./rate-limit";
 export { deleteOrganization, insertShop, isUniqueViolation, resolveShopBySlug } from "./shops";
 export { deviceCatalog, type DeviceModel } from "./device-catalog";
 export {
@@ -50,14 +56,15 @@ export {
 export { authDatabaseAdapter } from "./auth-adapter";
 
 // Repositories for one tenant. Every query a repository runs is filtered by
-// the shop id given here; later tickets add repairs, sales, store config and
-// domains.
+// the shop id given here; a later ticket adds sales.
 export type ShopRepos = {
   shop: ShopRepo;
   emailOutbox: EmailOutboxRepo;
   buybacks: BuybackRepo;
   products: ProductRepo;
   repairs: RepairsRepo;
+  storeConfig: StoreConfigRepo;
+  customDomains: CustomDomainRepo;
 };
 
 export function forShop(shopId: string): ShopRepos {
@@ -67,6 +74,8 @@ export function forShop(shopId: string): ShopRepos {
     buybacks: buybackRepo(shopId),
     products: productRepo(shopId),
     repairs: repairsRepo(shopId),
+    storeConfig: storeConfigRepo(shopId),
+    customDomains: customDomainRepo(shopId),
   };
 }
 

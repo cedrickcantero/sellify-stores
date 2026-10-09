@@ -20,3 +20,10 @@ export async function getActiveShop(): Promise<ActiveShop> {
 
   return { shopId: shop.id, userId: session.user.id, shop };
 }
+
+// The signed-in user's id, or null. For pages that work without a session
+// (a store preview); it never redirects.
+export async function getSessionUserId(): Promise<string | null> {
+  const session = await auth.api.getSession({ headers: await headers() });
+  return session?.user.id ?? null;
+}

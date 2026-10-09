@@ -60,8 +60,8 @@ can take longer than 250ms and was failing intermittently with ETIMEDOUT.
 | `BLOB_READ_WRITE_TOKEN` | Vercel Blob token for logo and product image uploads. |
 | `RESEND_API_KEY` | Resend API key for sending email. Unset: `sendEmail` records the email as `failed` with a clear error and never throws. |
 | `EMAIL_FROM` | Sender address for all email, on a domain verified in Resend. |
-| `APP_HOST` | Host that serves the backend. |
-| `STORE_ROOT_DOMAIN` | Root domain whose subdomains serve stores. |
+| `APP_HOST` | Host that serves the backend. `localhost` and `*.vercel.app` always count as the app host too. |
+| `STORE_ROOT_DOMAIN` | Optional. Root domain whose subdomains serve stores (`<slug>.<root>`). Without it, stores are served at `/s/<slug>`. |
 | `NEON_LOCAL_WS_PROXY` | Optional, local only. Routes the Neon driver to a plain local Postgres through `pnpm db:local-proxy`. |
 
 On Vercel, set the same variables (except `TEST_DATABASE_URL` and
@@ -88,13 +88,54 @@ On Vercel, set the same variables (except `TEST_DATABASE_URL` and
 
 | Module | Path | Role |
 | --- | --- | --- |
-| domain | `src/domain` | Pure logic and types, no IO (`Result`, slugs, image detection). |
+| domain | `src/domain` | Pure logic and types, no IO (`Result`, slugs, image detection, SVG sanitising, the `StoreConfig` schema, store host rules and theme variables). |
 | data | `src/data` | Database schema, the client and tenant-scoped repositories. `forShop(shopId)` is the way in; it is the only module allowed to import the database client. Other modules import only `@/data`; scripts and `src/test` may also import `@/data/maintenance`. |
-| services | `src/services` | Use cases (sign-up, `uploadImage(shopId, file)` which stores under `images/<shopId>/`). Take the shop id from the server, never from the browser. |
+| services | `src/services` | Use cases (sign-up, `uploadImage(shopId, file)` which stores under `images/<shopId>/` and sanitises SVGs, the online store: `saveDraft`, `publishStore`, `setStoreOnline`, `resolveStore`, `getStorefront`, and `rateLimit`). Take the shop id from the server, never from the browser. |
 | auth | `src/auth` | Better Auth setup and `getActiveShop()` for backend pages, which also checks the user is still a member of the shop. |
 | ui | `src/ui` | The Sellify platform design system: shadcn-style components on Radix primitives, restyled to the Sellify tokens in `src/app/globals.css`, plus the backend `AppShell`. Backend pages import only from `@/ui`. Rules: `CLAUDE.md`; guideline: `docs/brand/sellify.md`; gallery: `/dev/components` (dev server only). |
-| app | `src/app` | Routes. `(auth)` for sign-up and login, `(backend)` for the shop owner's backend (its layout renders the `AppShell`). |
+| store-ui | `src/store-ui` | The store surface: `StoreShell`, the offline page, `HoneypotField`. Styled only from `var(--store-*)` variables derived from the store's config; never imports `@/ui`. |
+| app | `src/app` | Routes. `(auth)` for sign-up and login, `(backend)` for the shop owner's backend (its layout renders the `AppShell`), `(store)/s/[slug]` for customer-facing stores. `src/proxy.ts` rewrites store hosts (see below). |
 | test | `src/test`, `e2e` | Test helpers (`seedTwoShops`), integration setup and Playwright smoke tests. |
 
 A shop is a Better Auth organization; the shop id is the organization id, and
 the backend's active shop is the session's active organization.
+
+## Store addresses and routing
+
+Store pages live in `src/app/(store)/s/[slug]`. Which surface a request is
+for is decided from its host and path by `classifyRequest` in
+`src/domain/store-host.ts`:
+
+1. A path `/s/<slug>` resolves the store by slug on any host. This is the
+   address used on Vercel previews and locally, since no store root domain
+   is owned during the trial.
+2. The app host is the backend: `APP_HOST`, plus `localhost`, `127.0.0.1`,
+   `[::1]` and any `*.vercel.app` preview host.
+3. `<slug>.<STORE_ROOT_DOMAIN>` resolves the store by slug (only when
+   `STORE_ROOT_DOMAIN` is set; locally `STORE_ROOT_DOMAIN=localhost` makes
+   `http://<slug>.localhost:3000` work).
+4. Any other host is looked up as a verified custom domain.
+
+`src/proxy.ts` (Next.js 16 Proxy, formerly Middleware) does host to path
+rewriting only and never touches the database: a request on a store host is
+rewritten to `/s/_host/<path>`. The store layout then calls
+`resolveStore(host, pathname)` with the real host, so the shop id is always
+resolved server-side and never taken from the browser. `_host` is not a
+valid slug, so `/s/_host` on the app host is a 404. The proxy also turns a
+`?preview` query into a request header (layouts cannot read search params)
+and marks preview responses `no-store`; `getStorefront` still shows the
+draft only to a member of the shop.
+
+A store shows its published config only when the shop exists, the store is
+online and it has been published. Otherwise it shows a branded offline page;
+an address that matches no shop is a 404.
+
+The store surface (`src/store-ui`, `src/app/(store)`) is styled only from
+CSS variables derived from the store's brand settings
+(`storeThemeVars` in `src/domain/store-theme.ts`). Lint forbids importing
+`@/ui` there; the Sellify raw colour rule does not apply to it.
+
+Public store forms use `rateLimit(key, { capacity, refillPerMinute })`
+(a Postgres token bucket in `rate_limit_bucket`) and the `HoneypotField`
+with `isHoneypotTripped(form)`. Login and sign-up are rate limited per IP
+and per email.
