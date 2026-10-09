@@ -1,5 +1,6 @@
 import "server-only";
 import { cookies } from "next/headers";
+import { cache } from "react";
 import { clampToStock, parseCart, serializeCart, type CartLine } from "@/domain/cart";
 import { listStoreProducts, type StoreProduct } from "@/services/store-products";
 
@@ -21,12 +22,14 @@ export async function readCart(shopId: string): Promise<CartLine[]> {
 // page, the nav badge, every basket action and checkout all use this, so
 // they always agree. `saved` is the raw cookie, `products` the shop's
 // active products read in the same call (for pricing).
-export async function loadBasket(
-  shopId: string,
-): Promise<{ saved: CartLine[]; lines: CartLine[]; products: StoreProduct[] }> {
-  const [saved, products] = await Promise.all([readCart(shopId), listStoreProducts(shopId)]);
-  return { saved, lines: clampToStock(saved, products), products };
-}
+// Cached per request and shop, so the layout and the page share one query.
+// Actions must not rely on a read after their own write in the same request.
+export const loadBasket = cache(
+  async (shopId: string): Promise<{ saved: CartLine[]; lines: CartLine[]; products: StoreProduct[] }> => {
+    const [saved, products] = await Promise.all([readCart(shopId), listStoreProducts(shopId)]);
+    return { saved, lines: clampToStock(saved, products), products };
+  },
+);
 
 export async function readBuyableCart(shopId: string): Promise<CartLine[]> {
   return (await loadBasket(shopId)).lines;

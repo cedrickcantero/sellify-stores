@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 export default async function StoreProductPage({ params }: PageProps<"/s/[slug]/shop/[productId]">) {
   const { slug, productId } = await params;
-  const { shopId, basePath } = await requireLiveStore(slug, "shop");
+  const { shopId, basePath, preview } = await requireLiveStore(slug, "shop");
   const product = await getStoreProduct(shopId, productId);
   if (!product) notFound();
 
@@ -20,7 +20,7 @@ export default async function StoreProductPage({ params }: PageProps<"/s/[slug]/
 
   return (
     <div className="flex flex-col gap-6">
-      <Link href={storeHref(basePath, "/shop")} className="w-fit font-semibold underline">
+      <Link href={storeHref(basePath, "/shop", preview)} className="w-fit font-semibold underline">
         Back to the shop
       </Link>
       <div className="grid grid-cols-1 gap-8 md:grid-cols-2">

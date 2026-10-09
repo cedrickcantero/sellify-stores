@@ -10,9 +10,10 @@ vi.mock("next/headers", () => ({
     delete: (name: string) => void jar.delete(name),
   }),
 }));
+vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 const current = { shopId: "" };
 vi.mock("./store-context", () => ({
-  requireLiveStore: async () => ({ shopId: current.shopId, basePath: "/s/test" }),
+  requireLiveStore: async () => ({ shopId: current.shopId, basePath: "/s/test", preview: false }),
 }));
 
 const { addToBasket, removeFromBasket, setBasketQty } = await import("./basket-actions");
@@ -111,6 +112,17 @@ describe("basket actions", () => {
 
     const state = await run(addToBasket("s", phone.id, {}, new FormData()));
     expect(state?.message).toMatch(/sold out/i);
+    expect(jar.has(cartCookieName(shopA.shopId))).toBe(false);
+  });
+
+  it("removes a sold out line with a removal message, not a stock message", async () => {
+    const { shopA } = await setup();
+    const phone = await forShop(shopA.shopId).products.create(input("Pixel 7", 2));
+    await run(addToBasket("s", phone.id, {}, new FormData()));
+    await forShop(shopA.shopId).products.update(phone.id, input("Pixel 7", 0), 2);
+
+    const state = await setBasketQty("s", phone.id, {}, form("2"));
+    expect(state.message).toMatch(/no longer available/i);
     expect(jar.has(cartCookieName(shopA.shopId))).toBe(false);
   });
 

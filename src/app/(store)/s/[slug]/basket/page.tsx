@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 export default async function StoreBasketPage({ params }: PageProps<"/s/[slug]/basket">) {
   const { slug } = await params;
-  const { shopId, basePath } = await requireLiveStore(slug, "shop");
+  const { shopId, basePath, preview } = await requireLiveStore(slug, "shop");
   // What can be bought right now: quantities capped at current stock, prices
   // from the database.
   const { saved, lines, products } = await loadBasket(shopId);
@@ -30,7 +30,7 @@ export default async function StoreBasketPage({ params }: PageProps<"/s/[slug]/b
       {priced.length === 0 ? (
         <div className="flex flex-col items-start gap-4">
           <p>Your basket is empty.</p>
-          <Link href={storeHref(basePath, "/shop")} className={storeSecondaryButtonClass}>
+          <Link href={storeHref(basePath, "/shop", preview)} className={storeSecondaryButtonClass}>
             Browse the shop
           </Link>
         </div>
@@ -41,7 +41,7 @@ export default async function StoreBasketPage({ params }: PageProps<"/s/[slug]/b
               <li key={product.id} className="grid grid-cols-[5rem_1fr] gap-4 py-4 sm:grid-cols-[6rem_1fr_auto]">
                 <ProductImage product={product} className="aspect-square w-full rounded-(--store-radius)" />
                 <div className="flex flex-col gap-2">
-                  <Link href={storeHref(basePath, `/shop/${product.id}`)} className="font-bold underline">
+                  <Link href={storeHref(basePath, `/shop/${product.id}`, preview)} className="font-bold underline">
                     {product.title}
                   </Link>
                   <p>{formatCents(product.price)} each</p>

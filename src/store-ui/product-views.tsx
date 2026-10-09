@@ -49,10 +49,12 @@ export const storeSecondaryButtonClass =
 export function ProductGrid({
   products,
   basePath,
+  preview = false,
   addAction,
 }: {
   products: ProductView[];
   basePath: string;
+  preview?: boolean;
   /** Returns the form action that adds this product to the basket. */
   addAction: (productId: string) => (previous: { message?: string }, formData: FormData) => Promise<{ message?: string }>;
 }) {
@@ -64,7 +66,7 @@ export function ProductGrid({
           className="flex flex-col overflow-hidden rounded-(--store-radius) border border-(--store-text)/15"
         >
           <Link
-            href={storeHref(basePath, `/shop/${product.id}`)}
+            href={storeHref(basePath, `/shop/${product.id}`, preview)}
             className="flex flex-col focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--store-primary)"
           >
             <ProductImage product={product} className="aspect-4/3 w-full" />

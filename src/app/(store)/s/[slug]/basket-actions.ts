@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { basketIdSchema, parseQtyInput, setLineQty } from "@/domain/cart";
 import { readBuyableCart, writeCart } from "@/services/cart";
@@ -27,10 +28,14 @@ export async function addToBasket(
 ): Promise<BasketState> {
   void _formArgs;
   if (!basketIdSchema.safeParse(slug).success || !basketIdSchema.safeParse(productId).success) return INVALID;
-  const { shopId, basePath } = await requireLiveStore(slug, "shop");
+  const { shopId, basePath, preview } = await requireLiveStore(slug, "shop");
   const product = await getStoreProduct(shopId, productId);
-  if (!product) redirect(storeHref(basePath, "/shop"));
-  if (product.soldOut) return { message: "Sorry, this one just sold out." };
+  if (!product) redirect(storeHref(basePath, "/shop", preview));
+  if (product.soldOut) {
+    // Refresh the page so its button shows Sold out.
+    revalidatePath(storeHref(basePath, "/shop"));
+    return { message: "Sorry, this one just sold out." };
+  }
 
   const lines = await readBuyableCart(shopId);
   const current = lines.find((line) => line.productId === productId)?.qty ?? 0;
@@ -41,7 +46,7 @@ export async function addToBasket(
     return { message: "Your basket is full. Remove an item to add another." };
   }
   await writeCart(shopId, next);
-  redirect(storeHref(basePath, "/basket"));
+  redirect(storeHref(basePath, "/basket", preview));
 }
 
 export async function setBasketQty(
@@ -54,11 +59,15 @@ export async function setBasketQty(
   const qty = parseQtyInput(formData.get("qty"));
   if (qty === null) return BAD_QTY;
 
-  const { shopId } = await requireLiveStore(slug, "shop");
+  const { shopId, basePath } = await requireLiveStore(slug, "shop");
   const product = await getStoreProduct(shopId, productId);
   const lines = await readBuyableCart(shopId);
   await writeCart(shopId, setLineQty(lines, productId, qty, product?.stockQty ?? 0));
-  if (!product) return { message: "That item is no longer available, so we removed it." };
+  if (!product || product.soldOut) {
+    // The line is gone; refresh the basket so it leaves the page.
+    revalidatePath(storeHref(basePath, "/basket"));
+    return { message: "That item is no longer available, so we removed it." };
+  }
   if (qty > product.stockQty) {
     return { message: `Only ${product.stockQty} in stock, so we set the quantity to ${product.stockQty}.` };
   }

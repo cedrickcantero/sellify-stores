@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function StoreShopPage({ params }: PageProps<"/s/[slug]/shop">) {
   const { slug } = await params;
-  const { shopId, basePath } = await requireLiveStore(slug, "shop");
+  const { shopId, basePath, preview } = await requireLiveStore(slug, "shop");
   const products = await listStoreProducts(shopId);
 
   return (
@@ -20,6 +20,7 @@ export default async function StoreShopPage({ params }: PageProps<"/s/[slug]/sho
         <ProductGrid
           products={products}
           basePath={basePath}
+          preview={preview}
           addAction={(productId) => addToBasket.bind(null, slug, productId)}
         />
       )}
