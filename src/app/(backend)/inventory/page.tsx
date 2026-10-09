@@ -68,6 +68,7 @@ function readFilter(params: Record<string, string | string[] | undefined>): Prod
 
 export default async function InventoryPage({ searchParams }: PageProps<"/inventory">) {
   const { shopId } = await getActiveShop();
+  const photos = { shopId, configured: Boolean(process.env.BLOB_READ_WRITE_TOKEN) };
   const filter = readFilter(await searchParams);
   const [products, catalog] = await Promise.all([
     forShop(shopId).products.list(filter),
@@ -85,7 +86,7 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
       <PageHeader
         title="Inventory"
         description="Your phones and accessories, with stock and photos."
-        actions={<AddProductButton models={models} />}
+        actions={<AddProductButton models={models} photos={photos} />}
       />
       <FilterBar filters={filters} />
       <Table caption="Products">
@@ -145,6 +146,7 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
                 <TableCell align="right">
                   <RowActions
                     models={models}
+                    photos={photos}
                     product={{
                       id: product.id,
                       title: product.title,

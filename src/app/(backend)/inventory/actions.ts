@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { getActiveShop } from "@/auth/session";
 import { forShop } from "@/data";
 import type { ProductFieldErrors } from "@/domain/product";
@@ -12,7 +13,6 @@ export type ProductFormState = {
   fields?: ProductFieldErrors;
   form?: string;
   values?: Record<string, string>;
-  keptImages?: string[];
 };
 
 const FIELDS = ["title", "kind", "condition", "price", "stockQty", "deviceModelId"] as const;
@@ -20,10 +20,6 @@ const FIELDS = ["title", "kind", "condition", "price", "stockQty", "deviceModelI
 function text(form: FormData, name: string): string {
   const value = form.get(name);
   return typeof value === "string" ? value : "";
-}
-
-function strings(form: FormData, name: string): string[] {
-  return form.getAll(name).filter((v): v is string => typeof v === "string");
 }
 
 export async function saveProductAction(
@@ -37,23 +33,29 @@ export async function saveProductAction(
   >;
   // The device model Select cannot hold an empty value, so "none" stands for it.
   if (values.deviceModelId === "none") values.deviceModelId = "";
-  const keptImages = strings(form, "keptImage");
 
+  const expected = text(form, "expectedStockQty");
   const result = await saveProduct(shopId, {
     id: text(form, "id") || undefined,
     values,
-    keptImages,
-    files: form.getAll("photos").filter((v): v is File => v instanceof File),
+    imageUrls: form.getAll("image").filter((v): v is string => typeof v === "string"),
+    expectedStockQty: /^\d{1,9}$/.test(expected) ? Number(expected) : undefined,
   });
-  if (!result.ok) return { ...result.error, values, keptImages };
+  if (!result.ok) return { ...result.error, values };
 
   revalidatePath("/inventory");
   return { saved: true };
 }
 
+const productId = z.uuid();
+
 export async function removeProductAction(id: string): Promise<{ error?: string }> {
+  const parsed = productId.safeParse(id);
+  if (!parsed.success) {
+    return { error: "We could not find that product. Reload the page and try again." };
+  }
   const { shopId } = await getActiveShop();
-  const removed = await forShop(shopId).products.remove(id);
+  const removed = await forShop(shopId).products.remove(parsed.data);
   revalidatePath("/inventory");
   return removed ? {} : { error: "That product was already removed." };
 }

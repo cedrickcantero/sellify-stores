@@ -15,7 +15,9 @@ export const product = pgTable(
       .references(() => shop.id, { onDelete: "cascade" }),
     title: text().notNull(),
     kind: text({ enum: ["phone", "accessory"] }).notNull(),
-    condition: text({ enum: ["new", "like_new", "good", "fair"] }).notNull(),
+    condition: text({
+      enum: ["new", "refurbished", "like_new", "good", "fair", "used"],
+    }).notNull(),
     price: integer().notNull(),
     stockQty: integer().notNull().default(0),
     images: text()
@@ -24,6 +26,8 @@ export const product = pgTable(
       .default(sql`'{}'::text[]`),
     deviceModelId: text().references(() => deviceModel.id, { onDelete: "set null" }),
     createdAt: timestamp().notNull().defaultNow(),
+    // Removing a product archives it, so past sales keep pointing at it.
+    archivedAt: timestamp(),
   },
   (table) => [
     check("product_stock_qty_non_negative", sql`${table.stockQty} >= 0`),

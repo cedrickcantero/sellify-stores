@@ -1,8 +1,14 @@
 "use client";
 
 import { Button, type SelectOption } from "@/ui";
-import { ProductFormModal } from "./product-form-modal";
+import { ProductFormModal, type PhotoUploadConfig } from "./product-form-modal";
 
-export function AddProductButton({ models }: { models: SelectOption[] }) {
-  return <ProductFormModal models={models} trigger={<Button>Add product</Button>} />;
+export function AddProductButton({
+  models,
+  photos,
+}: {
+  models: SelectOption[];
+  photos: PhotoUploadConfig;
+}) {
+  return <ProductFormModal models={models} photos={photos} trigger={<Button>Add product</Button>} />;
 }

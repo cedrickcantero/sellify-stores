@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, type SQL } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, type SQL } from "drizzle-orm";
 import type { ProductCondition, ProductInput, ProductKind } from "@/domain/product";
 import { db } from "../db";
 import { product } from "../schema";
@@ -22,13 +22,22 @@ export type ProductFilter = {
   stock?: "in" | "out";
 };
 
+export type UpdateProductResult =
+  | { ok: true; product: Product }
+  | { ok: false; reason: "not_found" | "stock_changed" };
+
 export type ProductRepo = {
+  /** Active (not archived) products, newest first. */
   list(filter?: ProductFilter): Promise<Product[]>;
-  get(id: string): Promise<Product | null>;
+  /** Archived products are hidden unless `includeArchived` is set. */
+  get(id: string, options?: { includeArchived?: boolean }): Promise<Product | null>;
   create(input: ProductInput): Promise<Product>;
-  /** Null when the product does not exist in this shop. */
-  update(id: string, input: ProductInput): Promise<Product | null>;
-  /** False when the product does not exist in this shop. */
+  /**
+   * Saves an edit only if the stock is still `expectedStockQty`, the value
+   * the editor saw, so a sale made meanwhile is never overwritten.
+   */
+  update(id: string, input: ProductInput, expectedStockQty: number): Promise<UpdateProductResult>;
+  /** Archives the product. False when it is not an active product of this shop. */
   remove(id: string): Promise<boolean>;
 };
 
@@ -61,10 +70,22 @@ function columns(input: ProductInput) {
 export function productRepo(shopId: string): ProductRepo {
   // Every query below is filtered by shopId.
   const mine = (id: string) => and(eq(product.shopId, shopId), eq(product.id, id));
+  const active = (id: string) => and(mine(id), isNull(product.archivedAt));
+
+  async function get(id: string, options: { includeArchived?: boolean } = {}) {
+    const rows = await db
+      .select()
+      .from(product)
+      .where(options.includeArchived ? mine(id) : active(id))
+      .limit(1);
+    return rows[0] ? toProduct(rows[0]) : null;
+  }
 
   return {
+    get,
+
     async list(filter = {}) {
-      const conditions: SQL[] = [eq(product.shopId, shopId)];
+      const conditions: SQL[] = [eq(product.shopId, shopId), isNull(product.archivedAt)];
       if (filter.kind) conditions.push(eq(product.kind, filter.kind));
       if (filter.condition) conditions.push(eq(product.condition, filter.condition));
       if (filter.stock === "in") conditions.push(gt(product.stockQty, 0));
@@ -77,11 +98,6 @@ export function productRepo(shopId: string): ProductRepo {
       return rows.map(toProduct);
     },
 
-    async get(id) {
-      const rows = await db.select().from(product).where(mine(id)).limit(1);
-      return rows[0] ? toProduct(rows[0]) : null;
-    },
-
     async create(input) {
       const [row] = await db
         .insert(product)
@@ -90,13 +106,23 @@ export function productRepo(shopId: string): ProductRepo {
       return toProduct(row);
     },
 
-    async update(id, input) {
-      const [row] = await db.update(product).set(columns(input)).where(mine(id)).returning();
-      return row ? toProduct(row) : null;
+    async update(id, input, expectedStockQty) {
+      const [row] = await db
+        .update(product)
+        .set(columns(input))
+        .where(and(active(id), eq(product.stockQty, expectedStockQty)))
+        .returning();
+      if (row) return { ok: true, product: toProduct(row) };
+      // No row changed: either the product is gone or its stock moved.
+      return { ok: false, reason: (await get(id)) ? "stock_changed" : "not_found" };
     },
 
     async remove(id) {
-      const rows = await db.delete(product).where(mine(id)).returning({ id: product.id });
+      const rows = await db
+        .update(product)
+        .set({ archivedAt: new Date() })
+        .where(active(id))
+        .returning({ id: product.id });
       return rows.length > 0;
     },
   };

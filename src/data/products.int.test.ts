@@ -71,12 +71,68 @@ describe("products repository", () => {
     const products = forShop(shopA.shopId).products;
     const created = await products.create(input());
 
-    const updated = await products.update(created.id, input({ title: "iPhone 13 Pro", stockQty: 0 }));
-    expect(updated).toMatchObject({ id: created.id, title: "iPhone 13 Pro", stockQty: 0 });
+    const updated = await products.update(
+      created.id,
+      input({ title: "iPhone 13 Pro", stockQty: 0 }),
+      created.stockQty,
+    );
+    expect(updated).toMatchObject({
+      ok: true,
+      product: { id: created.id, title: "iPhone 13 Pro", stockQty: 0 },
+    });
 
     expect(await products.remove(created.id)).toBe(true);
-    expect(await products.get(created.id)).toBeNull();
     expect(await products.remove(created.id)).toBe(false);
+  });
+
+  it("refuses an edit saved against stale stock and leaves the stock unchanged", async () => {
+    const { shopA } = await seedTwoShops();
+    const products = forShop(shopA.shopId).products;
+    const created = await products.create(input({ stockQty: 5 }));
+
+    // The owner opens the form (stock 5); a sale elsewhere takes stock to 4.
+    await products.update(created.id, input({ stockQty: 4 }), 5);
+
+    const stale = await products.update(created.id, input({ title: "Edited", stockQty: 5 }), 5);
+
+    expect(stale).toEqual({ ok: false, reason: "stock_changed" });
+    expect(await products.get(created.id)).toMatchObject({ title: "iPhone 13", stockQty: 4 });
+  });
+
+  it("reports a missing product as not found", async () => {
+    const { shopA } = await seedTwoShops();
+    const result = await forShop(shopA.shopId).products.update("no-such-id", input(), 1);
+    expect(result).toEqual({ ok: false, reason: "not_found" });
+  });
+
+  it("archives instead of deleting: gone from list and get, row kept", async () => {
+    const { shopA } = await seedTwoShops();
+    const products = forShop(shopA.shopId).products;
+    const created = await products.create(input());
+
+    expect(await products.remove(created.id)).toBe(true);
+
+    expect(await products.list()).toEqual([]);
+    expect(await products.get(created.id)).toBeNull();
+    expect(await products.get(created.id, { includeArchived: true })).toMatchObject({
+      id: created.id,
+    });
+    expect(await products.update(created.id, input(), 2)).toEqual({
+      ok: false,
+      reason: "not_found",
+    });
+  });
+
+  it("stores the new conditions", async () => {
+    const { shopA } = await seedTwoShops();
+    const products = forShop(shopA.shopId).products;
+    const refurbished = await products.create(input({ condition: "refurbished" }));
+    const used = await products.create(input({ condition: "used" }));
+
+    expect((await products.list({ condition: "refurbished" })).map((p) => p.id)).toEqual([
+      refurbished.id,
+    ]);
+    expect((await products.list({ condition: "used" })).map((p) => p.id)).toEqual([used.id]);
   });
 
   it("refuses a negative stock quantity at the database", async () => {
@@ -93,7 +149,11 @@ describe("products repository", () => {
 
     expect((await a.list()).map((p) => p.id)).toEqual([mine.id]);
     expect(await a.get(theirs.id)).toBeNull();
-    expect(await a.update(theirs.id, input({ title: "Hijacked" }))).toBeNull();
+    expect(await a.update(theirs.id, input({ title: "Hijacked" }), theirs.stockQty)).toEqual({
+      ok: false,
+      reason: "not_found",
+    });
+    expect(await a.get(theirs.id, { includeArchived: true })).toBeNull();
     expect(await a.remove(theirs.id)).toBe(false);
 
     expect(await b.get(theirs.id)).toMatchObject({ title: "Shop B phone" });

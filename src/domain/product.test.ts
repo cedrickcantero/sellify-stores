@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatCents, parseProductForm, priceToCents, stockStatus } from "./product";
+import { CONDITION_LABELS, PRODUCT_CONDITIONS, formatCents, parseProductForm, priceToCents, stockStatus } from "./product";
 
 const valid = {
   title: "iPhone 13 128GB",
@@ -24,6 +24,11 @@ describe("priceToCents", () => {
     expect(priceToCents("abc")).toBeNull();
     expect(priceToCents("-5")).toBeNull();
     expect(priceToCents("0")).toBeNull();
+  });
+
+  it("allows up to 100,000 euros and no more", () => {
+    expect(priceToCents("100000")).toBe(10_000_000);
+    expect(priceToCents("100000.01")).toBeNull();
   });
 });
 
@@ -67,6 +72,20 @@ describe("parseProductForm", () => {
       price: "Enter a price above 0.",
       stockQty: "Enter a whole number, 0 or more.",
     });
+  });
+
+  it("says when a price is too high", () => {
+    const result = parseProductForm({ ...valid, price: "100000.01" });
+    expect(!result.ok && result.error.price).toBe("Enter a price up to €100,000.");
+  });
+
+  it("accepts every condition in display order", () => {
+    expect(PRODUCT_CONDITIONS).toEqual(["new", "refurbished", "like_new", "good", "fair", "used"]);
+    expect(CONDITION_LABELS.refurbished).toBe("Refurbished");
+    expect(CONDITION_LABELS.used).toBe("Used");
+    for (const condition of PRODUCT_CONDITIONS) {
+      expect(parseProductForm({ ...valid, condition }).ok).toBe(true);
+    }
   });
 
   it("rejects fractional stock and more than 8 photos", () => {

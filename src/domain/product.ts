@@ -2,7 +2,15 @@ import { z } from "zod";
 import { err, ok, type Result } from "./result";
 
 export const PRODUCT_KINDS = ["phone", "accessory"] as const;
-export const PRODUCT_CONDITIONS = ["new", "like_new", "good", "fair"] as const;
+export const PRODUCT_CONDITIONS = [
+  "new",
+  "refurbished",
+  "like_new",
+  "good",
+  "fair",
+  "used",
+] as const;
+export const MAX_PRICE_CENTS = 10_000_000;
 export const MAX_PRODUCT_IMAGES = 8;
 
 export type ProductKind = (typeof PRODUCT_KINDS)[number];
@@ -15,9 +23,11 @@ export const KIND_LABELS: Record<ProductKind, string> = {
 
 export const CONDITION_LABELS: Record<ProductCondition, string> = {
   new: "New",
+  refurbished: "Refurbished",
   like_new: "Like new",
   good: "Good",
   fair: "Fair",
+  used: "Used",
 };
 
 // What a shop owner can set on a product. Price is in cents.
@@ -34,13 +44,13 @@ export type ProductInput = {
 const PRICE_TEXT = /^\d+([.,]\d{1,2})?$/;
 
 // "349.50" or "349,5" in euros to whole cents. Null for anything that is not
-// a price above zero with at most two decimals.
+// a price above zero, up to €100,000, with at most two decimals.
 export function priceToCents(text: string): number | null {
   const trimmed = text.trim();
   if (!PRICE_TEXT.test(trimmed)) return null;
   const [whole, fraction = ""] = trimmed.replace(",", ".").split(".");
   const cents = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
-  return Number.isSafeInteger(cents) && cents > 0 ? cents : null;
+  return Number.isSafeInteger(cents) && cents > 0 && cents <= MAX_PRICE_CENTS ? cents : null;
 }
 
 export function formatCents(cents: number): string {
@@ -69,7 +79,14 @@ const productSchema = z.object({
   condition: z.enum(PRODUCT_CONDITIONS, "Choose a condition."),
   price: z.string().transform((text, ctx) => {
     const cents = priceToCents(text);
-    if (cents === null) ctx.addIssue({ code: "custom", message: "Enter a price above 0." });
+    if (cents === null) {
+      const typed = text.trim();
+      const tooHigh = PRICE_TEXT.test(typed) && Number(typed.replace(",", ".")) > 0;
+      ctx.addIssue({
+        code: "custom",
+        message: tooHigh ? "Enter a price up to €100,000." : "Enter a price above 0.",
+      });
+    }
     return cents ?? 0;
   }),
   stockQty: z

@@ -3,15 +3,17 @@
 import { useState, useTransition } from "react";
 import { Alert, Button, Modal, ModalClose, type SelectOption } from "@/ui";
 import { removeProductAction } from "./actions";
-import { ProductFormModal, type EditableProduct } from "./product-form-modal";
+import { ProductFormModal, type EditableProduct, type PhotoUploadConfig } from "./product-form-modal";
 
 // Edit and Remove for one table row. Remove asks for confirmation first.
 export function RowActions({
   product,
   models,
+  photos,
 }: {
   product: EditableProduct;
   models: SelectOption[];
+  photos: PhotoUploadConfig;
 }) {
   const [editing, setEditing] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -34,7 +36,11 @@ export function RowActions({
       <Button variant="ghost" size="sm" onClick={() => setRemoving(true)}>
         Remove
       </Button>
-      <ProductFormModal product={product} models={models} open={editing} onOpenChange={setEditing} />
+      <ProductFormModal
+        product={product}
+        models={models}
+        photos={photos}
+        open={editing} onOpenChange={setEditing} />
       <Modal
         size="sm"
         open={removing}
