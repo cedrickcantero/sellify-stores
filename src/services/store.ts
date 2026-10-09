@@ -1,4 +1,5 @@
 import "server-only";
+import { isDeepStrictEqual } from "node:util";
 import { activeShopForMember, forShop, resolveShopBySlug, resolveShopByVerifiedHostname } from "@/data";
 import { err, ok, type Result } from "@/domain/result";
 import {
@@ -76,14 +77,27 @@ export async function saveDraft(
   const merged = mergeStoreConfig(await currentDraft(shopId), patch);
   const parsed = StoreConfig.safeParse(merged);
   if (!parsed.success) return err(fieldErrorsOf(parsed.error));
-  // A logo must be one this shop uploaded to this project's Blob store.
+  // A logo the patch sets must be one this shop uploaded to this project's
+  // Blob store. An existing logo is not re-checked, so autosaving other
+  // fields never fails because of it.
   const logoUrl = parsed.data.brand.logoUrl;
-  const blobHost = blobHostForToken(process.env.BLOB_READ_WRITE_TOKEN);
-  if (logoUrl && !isShopLogoUrl(logoUrl, shopId, blobHost)) {
-    return err({ "brand.logoUrl": "Upload the logo again." });
+  if (patch.brand?.logoUrl !== undefined && logoUrl) {
+    const blobHost = blobHostForToken(process.env.BLOB_READ_WRITE_TOKEN);
+    if (!isShopLogoUrl(logoUrl, shopId, blobHost)) return err({ "brand.logoUrl": "Upload the logo again." });
   }
   await forShop(shopId).storeConfig.saveDraft(parsed.data);
   return ok(parsed.data);
+}
+
+// Whether the draft differs from what is published (true before the first
+// publish). Both sides are parsed with today's schema so defaults added since
+// a save do not count as a change.
+export async function hasUnpublishedChanges(shopId: string): Promise<boolean> {
+  const row = await forShop(shopId).storeConfig.get();
+  const published = row?.published ? parseStored(row.published) : null;
+  if (!published) return true;
+  const draft = (row && parseStored(row.draft)) ?? defaultStoreConfig(await shopName(shopId));
+  return !isDeepStrictEqual(draft, published);
 }
 
 // Validates the draft, copies it to published, appends a version row and

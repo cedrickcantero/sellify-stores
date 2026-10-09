@@ -7,6 +7,7 @@ export { NAV_ITEMS, type NavItem } from "./app-shell/nav-items";
 export { Button, buttonVariants, type ButtonProps } from "./button";
 export { Card, CardGrid, StatCard } from "./card";
 export { cn } from "./cn";
+export { ColorInput } from "./color-input";
 export { Field } from "./field";
 export { FilterBar, type FilterDef } from "./filter-bar";
 export { Input, Textarea } from "./input";

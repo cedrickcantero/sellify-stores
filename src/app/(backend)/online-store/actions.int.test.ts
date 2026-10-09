@@ -5,7 +5,7 @@ const active = { current: { shopId: "", userId: "" } };
 vi.mock("@/auth/session", () => ({ getActiveShop: async () => active.current }));
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
-const { saveStoreDetailsAction, setStoreOnlineAction } = await import("./actions");
+const { saveDraftAction, saveStoreDetailsAction, setStoreOnlineAction } = await import("./actions");
 const { getStoreSettings, publishStore } = await import("@/services/store");
 const { seedTwoShops } = await import("@/test/seed");
 
@@ -49,6 +49,52 @@ describe("saveStoreDetailsAction", () => {
     );
     expect(result.errors).toEqual({ "brand.logoUrl": "Upload the logo again." });
     expect((await getStoreSettings(shopA.shopId)).draft.brand.logoUrl).toBeUndefined();
+  });
+});
+
+describe("saveDraftAction", () => {
+  it("saves a patch to the signed-in shop's draft and reports unpublished changes", async () => {
+    const { shopA, shopB } = await seedTwoShops();
+    active.current = { shopId: shopA.shopId, userId: shopA.owner.userId };
+    await publishStore(shopA.shopId, shopA.owner.userId);
+
+    expect(await saveDraftAction({ content: { about: "We fix phones." } })).toEqual({
+      ok: true,
+      unpublishedChanges: true,
+    });
+    expect((await getStoreSettings(shopA.shopId)).draft.content.about).toBe("We fix phones.");
+    expect((await getStoreSettings(shopB.shopId)).draft.content.about).toBe("");
+  });
+
+  it("returns the field errors for an invalid value and saves nothing", async () => {
+    const { shopA } = await seedTwoShops();
+    active.current = { shopId: shopA.shopId, userId: shopA.owner.userId };
+
+    expect(await saveDraftAction({ brand: { colors: { primary: "teal" } } })).toEqual({
+      ok: false,
+      errors: { "brand.colors.primary": "Enter a colour like #0F766E." },
+    });
+    expect((await getStoreSettings(shopA.shopId)).draft.brand.colors.primary).toBe("#1f2937");
+  });
+
+  it("refuses a patch with keys the config does not have", async () => {
+    const { shopA } = await seedTwoShops();
+    active.current = { shopId: shopA.shopId, userId: shopA.owner.userId };
+
+    expect(await saveDraftAction({ shopId: "someone-else" })).toEqual({
+      ok: false,
+      errors: { config: "Could not save that change. Reload the page and try again." },
+    });
+  });
+
+  it("keeps autosaving other fields when the draft already has a logo", async () => {
+    const { shopA } = await seedTwoShops();
+    active.current = { shopId: shopA.shopId, userId: shopA.owner.userId };
+    const logoUrl = `https://abc123.public.blob.vercel-storage.com/images/${shopA.shopId}/0b7c9a2e.svg`;
+    expect(await saveDraftAction({ brand: { logoUrl } })).toMatchObject({ ok: true });
+
+    vi.stubEnv("BLOB_READ_WRITE_TOKEN", "vercel_blob_rw_zzz999_secretpart");
+    expect(await saveDraftAction({ contact: { phone: "091 123456" } })).toMatchObject({ ok: true });
   });
 });
 

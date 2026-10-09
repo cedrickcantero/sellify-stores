@@ -50,6 +50,15 @@ export function StoreShell({
           Preview of your draft. Customers see your published store.
         </p>
       ) : null}
+      {config.content.banner.enabled && config.content.banner.text ? (
+        <div
+          role="region"
+          aria-label="Announcement"
+          className="bg-(--store-accent) px-4 py-2 text-center text-sm font-semibold text-(--store-on-accent)"
+        >
+          {config.content.banner.text}
+        </div>
+      ) : null}
       <header className="border-b border-(--store-text)/15">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
           <Link href={storeHref(basePath, "/")} className="flex min-w-0 items-center gap-3">

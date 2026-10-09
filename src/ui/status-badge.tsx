@@ -29,6 +29,7 @@ const STATUSES = {
   // Store
   online: { label: "Online", tone: "success" },
   offline: { label: "Offline", tone: "neutral" },
+  unpublished: { label: "Unpublished changes", tone: "warning" },
   // Product stock
   in_stock: { label: "In stock", tone: "success" },
   sold_out: { label: "Sold out", tone: "warning" },

@@ -57,9 +57,10 @@ use it. Every page then gets the same thing. Colour values belong only in
 | `Modal`, `ModalClose` | Create, edit and confirm steps. `trigger` or controlled `open` / `onOpenChange`, `title`, `description`, `footer` (a `ModalClose` secondary Button, then the primary action), `size="sm"` for confirmations. Traps focus and closes on Escape. |
 | `Field` | Label, `hint` and `error` around one Input, Textarea or Select. It wires the label and error to the control. |
 | `Input`, `Textarea` | Text, number, email, search and file fields; multi-line text such as the store's about text. |
+| `ColorInput` | A brand colour: colour picker plus hex code, controlled (`value`, `onChange`). Wrap in a `Field`. |
 | `Select` | One choice from a short fixed list. `options`, `name` for forms, `value` / `onValueChange` when controlled. |
 | `Switch` | An on/off setting that applies at once: store online, banner shown, a tab visible. Has its own `label`. |
-| `StatusBadge` | The state of a record: `status` is one of `completed`, `needs_refund`, `booked`, `in_progress`, `done`, `cancelled`, `quoted`, `accepted`, `received`, `sent`, `failed`, `pending`, `verified`, `error`, `online`, `offline`, `in_stock`, `sold_out`. Label and colour follow from it. A new status gets a new entry in `src/ui/status-badge.tsx`. |
+| `StatusBadge` | The state of a record: `status` is one of `completed`, `needs_refund`, `booked`, `in_progress`, `done`, `cancelled`, `quoted`, `accepted`, `received`, `sent`, `failed`, `pending`, `verified`, `error`, `online`, `offline`, `unpublished`, `in_stock`, `sold_out`. Label and colour follow from it. A new status gets a new entry in `src/ui/status-badge.tsx`. |
 | `Alert` | One sentence about the whole form or page: `tone` `error` (announced), `success`, `warning`, `info`. For one field's error use `Field`'s `error`. |
 | `Pill` | A category label, not a state: a sale's channel, a product kind. `tone`: `neutral` (default) or `primary`. |
 | `AppShell` | Rendered once by the `(backend)` layout. The sidebar sections are `NAV_ITEMS` in `src/ui/app-shell/nav-items.ts`. |

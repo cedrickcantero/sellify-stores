@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
+import { ColorInputDemo } from "./color-input-demo";
 import {
   Button,
   Card,
@@ -192,6 +193,9 @@ export default function ComponentGalleryPage() {
           </Field>
           <Field label="Search">
             <Input type="search" placeholder="Search products" />
+          </Field>
+          <Field label="Brand colour" hint="Picker plus hex code.">
+            <ColorInputDemo />
           </Field>
           <Field label="About" className="md:col-span-2">
             <Textarea placeholder="Tell customers about your shop." />

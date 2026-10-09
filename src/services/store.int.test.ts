@@ -2,7 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { forShop } from "@/data";
 import { STORE_HOST_SEGMENT } from "@/domain/store-host";
 import { seedTwoShops } from "@/test/seed";
-import { getStoreSettings, getStorefront, publishStore, resolveStore, saveDraft, setStoreOnline } from "./store";
+import {
+  getStoreSettings,
+  getStorefront,
+  hasUnpublishedChanges,
+  publishStore,
+  resolveStore,
+  saveDraft,
+  setStoreOnline,
+} from "./store";
 
 beforeEach(() => {
   vi.stubEnv("APP_HOST", "sellify.example.com");
@@ -148,6 +156,52 @@ describe("saveDraft logo", () => {
   });
 });
 
+describe("saveDraft logo on unrelated autosaves", () => {
+  it("does not re-check an existing logo when the patch leaves brand.logoUrl alone", async () => {
+    vi.stubEnv("BLOB_READ_WRITE_TOKEN", "vercel_blob_rw_abc123_secretpart");
+    const { shopA } = await seedTwoShops();
+    const mine = `https://abc123.public.blob.vercel-storage.com/images/${shopA.shopId}/0b7c9a2e.svg`;
+    await saveDraft(shopA.shopId, { brand: { logoUrl: mine } });
+
+    // The Blob store changes (or the env is unset): the stored logo no longer
+    // matches the host, but editing the banner must still save.
+    vi.stubEnv("BLOB_READ_WRITE_TOKEN", "vercel_blob_rw_zzz999_secretpart");
+    const saved = await saveDraft(shopA.shopId, { content: { about: "New about" } });
+    expect(saved.ok && saved.value.content.about).toBe("New about");
+    expect(saved.ok && saved.value.brand.logoUrl).toBe(mine);
+
+    // Setting a logo is still checked.
+    expect(await saveDraft(shopA.shopId, { brand: { logoUrl: mine } })).toMatchObject({ ok: false });
+  });
+});
+
+describe("hasUnpublishedChanges", () => {
+  it("is true while nothing has been published", async () => {
+    const { shopA } = await seedTwoShops();
+    expect(await hasUnpublishedChanges(shopA.shopId)).toBe(true);
+  });
+
+  it("is false right after publishing, true after a draft edit, false when the edit is undone", async () => {
+    const { shopA } = await seedTwoShops();
+    await publishStore(shopA.shopId, shopA.owner.userId);
+    expect(await hasUnpublishedChanges(shopA.shopId)).toBe(false);
+
+    await saveDraft(shopA.shopId, { content: { about: "Changed" } });
+    expect(await hasUnpublishedChanges(shopA.shopId)).toBe(true);
+
+    await saveDraft(shopA.shopId, { content: { about: "" } });
+    expect(await hasUnpublishedChanges(shopA.shopId)).toBe(false);
+  });
+
+  it("does not report another shop's edits", async () => {
+    const { shopA, shopB } = await seedTwoShops();
+    await publishStore(shopA.shopId, shopA.owner.userId);
+    await publishStore(shopB.shopId, shopB.owner.userId);
+    await saveDraft(shopB.shopId, { content: { about: "B only" } });
+    expect(await hasUnpublishedChanges(shopA.shopId)).toBe(false);
+  });
+});
+
 describe("getStoreSettings", () => {
   it("reports the draft and whether the store is published and online", async () => {
     const { shopA } = await seedTwoShops();
@@ -283,5 +337,42 @@ describe("isolation", () => {
     expect(await forShop(shopB.shopId).customDomains.setStatus("shared.ie", "error")).toBe(false);
     expect(await forShop(shopB.shopId).customDomains.list()).toEqual([]);
     expect((await resolveStore("shared.ie", "/"))?.shopId).toBe(shopA.shopId);
+  });
+});
+
+describe("preview membership check", () => {
+  async function publishedWithNewerDraft() {
+    const seeded = await seedTwoShops();
+    await saveDraft(seeded.shopA.shopId, { content: { about: "Published copy" } });
+    await publishStore(seeded.shopA.shopId, seeded.shopA.owner.userId);
+    await saveDraft(seeded.shopA.shopId, { content: { about: "Draft copy" } });
+    return seeded;
+  }
+
+  it("a member of the shop previewing gets the draft", async () => {
+    const { shopA } = await publishedWithNewerDraft();
+    const store = await getStorefront(shopA.shopId, { preview: true, userId: shopA.owner.userId });
+    expect(store).toMatchObject({ status: "live", draft: true });
+    expect(store.status === "live" && store.config.content.about).toBe("Draft copy");
+  });
+
+  it("a non-member asking for preview gets the published config", async () => {
+    const { shopA, shopB } = await publishedWithNewerDraft();
+    const store = await getStorefront(shopA.shopId, { preview: true, userId: shopB.owner.userId });
+    expect(store.status === "live" && store.config.content.about).toBe("Published copy");
+    expect(store).not.toHaveProperty("draft");
+  });
+
+  it("an anonymous visitor asking for preview gets the published config", async () => {
+    const { shopA } = await publishedWithNewerDraft();
+    const store = await getStorefront(shopA.shopId, { preview: true });
+    expect(store.status === "live" && store.config.content.about).toBe("Published copy");
+  });
+
+  it("a non-member cannot preview a store that was never published", async () => {
+    const { shopA, shopB } = await seedTwoShops();
+    expect(await getStorefront(shopA.shopId, { preview: true, userId: shopB.owner.userId })).toMatchObject({
+      status: "offline",
+    });
   });
 });

@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getActiveShop } from "@/auth/session";
 import type { FieldErrors } from "@/domain/store-config";
-import { publishStore, saveDraft, setStoreOnline } from "@/services/store";
+import { toStoreConfigPatch } from "@/domain/store-config-patch";
+import { hasUnpublishedChanges, publishStore, saveDraft, setStoreOnline } from "@/services/store";
 
 export type StoreFormState = {
   errors?: FieldErrors;
@@ -44,6 +45,23 @@ export async function saveStoreDetailsAction(_prev: StoreFormState, form: FormDa
   if (!saved.ok) return { values, errors: saved.error };
   revalidatePath("/online-store");
   return { values, message: "Details saved. Publish to show them in your store." };
+}
+
+export type SaveDraftResult =
+  | { ok: true; unpublishedChanges: boolean }
+  | { ok: false; errors: FieldErrors };
+
+// Autosave from the editor: a patch for any subset of the config. The shop
+// comes from the session; the patch is structure-checked here and its values
+// are validated by saveDraft, which reports field errors and saves nothing
+// when any are invalid.
+export async function saveDraftAction(patch: unknown): Promise<SaveDraftResult> {
+  const { shopId } = await getActiveShop();
+  const checked = toStoreConfigPatch(patch);
+  if (!checked) return { ok: false, errors: { config: "Could not save that change. Reload the page and try again." } };
+  const saved = await saveDraft(shopId, checked);
+  if (!saved.ok) return { ok: false, errors: saved.error };
+  return { ok: true, unpublishedChanges: await hasUnpublishedChanges(shopId) };
 }
 
 export async function publishStoreAction(): Promise<StoreFormState> {

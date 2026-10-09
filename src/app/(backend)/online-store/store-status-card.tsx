@@ -7,10 +7,14 @@ import { publishStoreAction, setStoreOnlineAction, type StoreFormState } from ".
 // Store status, live address, the online switch and the Publish button.
 export function StoreStatusCard({
   address,
+  previewUrl,
   published,
   online,
+  unpublishedChanges,
 }: {
   address: string;
+  previewUrl: string;
+  unpublishedChanges: boolean;
   published: boolean;
   online: boolean;
 }) {
@@ -40,13 +44,25 @@ export function StoreStatusCard({
     <Card
       title="Your store"
       description="Publish to make your saved changes live. Switch the store off to hide it from customers."
-      actions={<StatusBadge status={live ? "online" : "offline"} />}
+      actions={
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {unpublishedChanges ? <StatusBadge status="unpublished" /> : null}
+          <StatusBadge status={live ? "online" : "offline"} />
+        </div>
+      }
       footer={
-        <form action={publish}>
-          <Button type="submit" disabled={publishing} className="w-full sm:w-auto">
-            {publishing ? "Publishing..." : "Publish store"}
+        <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+          <Button asChild variant="secondary" className="w-full sm:w-auto">
+            <a href={previewUrl} target="_blank" rel="noreferrer">
+              Preview draft
+            </a>
           </Button>
-        </form>
+          <form action={publish}>
+            <Button type="submit" disabled={publishing} className="w-full sm:w-auto">
+              {publishing ? "Publishing..." : "Publish store"}
+            </Button>
+          </form>
+        </div>
       }
     >
       <div className="flex flex-col gap-1.5">
