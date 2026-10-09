@@ -8,13 +8,17 @@ vi.mock("./actions", () => ({ publishStoreAction, setStoreOnlineAction: vi.fn() 
 
 import { StoreStatusCard } from "./store-status-card";
 
-function renderCard(flush: () => Promise<"saved" | "invalid" | "failed">, onPublished = vi.fn()) {
+function renderCard(
+  flush: () => Promise<"saved" | "invalid" | "failed">,
+  onPublished = vi.fn(),
+  state = { published: true, online: true },
+) {
   render(
     <StoreStatusCard
       address="http://localhost/s/fixit"
       previewUrl="http://localhost/s/fixit?preview"
-      published
-      online
+      published={state.published}
+      online={state.online}
       unpublishedChanges
       flush={flush}
       onPublished={onPublished}
@@ -49,5 +53,33 @@ describe("Publish", () => {
     await userEvent.click(screen.getByRole("button", { name: "Publish store" }));
     expect(publishStoreAction).toHaveBeenCalledTimes(1);
     expect(onPublished).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Publish on a store that was never published", () => {
+  it("shows online, switches on and drops 'Publish your store first' with the success message", async () => {
+    publishStoreAction.mockResolvedValue({ message: "Store published. It is live at your store address." });
+    // The server props stay stale: the page has not refreshed yet.
+    renderCard(async () => "saved", vi.fn(), { published: false, online: false });
+    expect(screen.getByText("Offline")).toBeInTheDocument();
+    expect(screen.getByText("Publish your store first.")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Publish store" }));
+
+    expect(await screen.findByText("Store published. It is live at your store address.")).toBeInTheDocument();
+    expect(screen.getByText("Online")).toBeInTheDocument();
+    expect(screen.queryByText("Offline")).not.toBeInTheDocument();
+    expect(screen.queryByText("Publish your store first.")).not.toBeInTheDocument();
+    const toggle = screen.getByRole("switch", { name: "Store online" });
+    expect(toggle).toBeEnabled();
+    expect(toggle).toBeChecked();
+  });
+
+  it("stays offline when publishing fails", async () => {
+    publishStoreAction.mockResolvedValue({ error: "Fix the highlighted store settings, then publish again." });
+    renderCard(async () => "saved", vi.fn(), { published: false, online: false });
+    await userEvent.click(screen.getByRole("button", { name: "Publish store" }));
+    expect(await screen.findByText(/Fix the highlighted store settings/)).toBeInTheDocument();
+    expect(screen.getByText("Offline")).toBeInTheDocument();
   });
 });

@@ -54,6 +54,7 @@ function RuleRow({
         <Field label={<span className="sr-only">Rule for {label}</span>}>
           <Select
             name={`${name}-kind`}
+            aria-label={`Rule for ${label}`}
             value={kind}
             onValueChange={(value) => setKind(value as RuleValue["kind"])}
             options={KIND_OPTIONS}
@@ -61,9 +62,10 @@ function RuleRow({
         </Field>
       </TableCell>
       <TableCell>
-        <Field label={<span className="sr-only">Amount in EUR for {label}</span>} error={error}>
+        <Field label={<span className="sr-only">Amount for {label}</span>} error={error}>
           <Input
             name={`${name}-value`}
+            aria-label={`Amount for ${label}`}
             inputMode="decimal"
             placeholder="0.00"
             value={euros}

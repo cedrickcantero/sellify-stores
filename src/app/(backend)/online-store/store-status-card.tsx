@@ -10,8 +10,8 @@ import { publishStoreAction, setStoreOnlineAction, type StoreFormState } from ".
 export function StoreStatusCard({
   address,
   previewUrl,
-  published,
-  online,
+  published: serverPublished,
+  online: serverOnline,
   unpublishedChanges,
   flush,
   onPublished,
@@ -28,6 +28,16 @@ export function StoreStatusCard({
 }) {
   const [state, setState] = useState<StoreFormState>({});
   const [publishing, setPublishing] = useState(false);
+  // Publishing puts the store online. The page's props catch up a moment
+  // later, so until they change this card shows the result itself.
+  const [justPublished, setJustPublished] = useState(false);
+  const [seen, setSeen] = useState({ serverPublished, serverOnline });
+  if (seen.serverPublished !== serverPublished || seen.serverOnline !== serverOnline) {
+    setSeen({ serverPublished, serverOnline });
+    setJustPublished(false);
+  }
+  const published = serverPublished || justPublished;
+  const online = serverOnline || justPublished;
   const [optimisticOnline, setOptimisticOnline] = useOptimistic(online);
   const [, startTransition] = useTransition();
   const live = published && optimisticOnline;
@@ -50,7 +60,10 @@ export function StoreStatusCard({
       }
       const result = await publishStoreAction();
       setState(result);
-      if (!result.error) onPublished();
+      if (!result.error) {
+        setJustPublished(true);
+        onPublished();
+      }
     } catch {
       setState({ error: "Could not publish. Check your connection and try again." });
     } finally {
