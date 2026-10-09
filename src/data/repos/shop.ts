@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "../db";
-import { shop } from "../schema";
+import { member, shop, user } from "../schema";
 
 export type Shop = {
   id: string;
@@ -11,6 +11,8 @@ export type Shop = {
 
 export type ShopRepo = {
   get(): Promise<Shop | null>;
+  /** The email of the shop's owner (the earliest owner member), or null. */
+  ownerEmail(): Promise<string | null>;
 };
 
 export function shopRepo(shopId: string): ShopRepo {
@@ -22,6 +24,16 @@ export function shopRepo(shopId: string): ShopRepo {
         .where(eq(shop.id, shopId))
         .limit(1);
       return rows[0] ?? null;
+    },
+    async ownerEmail() {
+      const rows = await db
+        .select({ email: user.email })
+        .from(member)
+        .innerJoin(user, eq(user.id, member.userId))
+        .where(and(eq(member.organizationId, shopId), eq(member.role, "owner")))
+        .orderBy(asc(member.createdAt))
+        .limit(1);
+      return rows[0]?.email ?? null;
     },
   };
 }
