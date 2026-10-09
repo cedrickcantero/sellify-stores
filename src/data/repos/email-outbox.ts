@@ -3,6 +3,8 @@ import type { EmailKind } from "@/domain/email";
 import { db } from "../db";
 import { emailOutbox } from "../schema";
 
+const LIST_LIMIT = 200;
+
 export type OutboxEmail = {
   id: string;
   recipient: string;
@@ -19,8 +21,8 @@ export type EmailOutboxRepo = {
   record(msg: { to: string; subject: string; html: string; kind: EmailKind }): Promise<string>;
   markSent(id: string): Promise<void>;
   markFailed(id: string, error: string): Promise<void>;
-  /** The shop's emails, newest first. */
-  list(): Promise<OutboxEmail[]>;
+  /** The shop's newest emails, newest first (default 200). */
+  list(limit?: number): Promise<OutboxEmail[]>;
 };
 
 export function emailOutboxRepo(shopId: string): EmailOutboxRepo {
@@ -45,7 +47,7 @@ export function emailOutboxRepo(shopId: string): EmailOutboxRepo {
     async markFailed(id, error) {
       await db.update(emailOutbox).set({ status: "failed", error }).where(mine(id));
     },
-    async list() {
+    async list(limit = LIST_LIMIT) {
       return db
         .select({
           id: emailOutbox.id,
@@ -59,7 +61,8 @@ export function emailOutboxRepo(shopId: string): EmailOutboxRepo {
         })
         .from(emailOutbox)
         .where(eq(emailOutbox.shopId, shopId))
-        .orderBy(desc(emailOutbox.createdAt));
+        .orderBy(desc(emailOutbox.createdAt))
+        .limit(limit);
     },
   };
 }

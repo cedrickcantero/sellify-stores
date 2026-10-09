@@ -97,6 +97,30 @@ describe("sendEmail", () => {
     expect(fromB.map((r) => r.subject).sort()).toEqual(["Also for B", "For B"]);
   });
 
+  it("marks the row failed with a timed out error when the mailer hangs", async () => {
+    const { shopA } = await seedTwoShops();
+    const hanging = { send: () => new Promise<void>(() => {}) };
+
+    const result = await sendEmail(shopA.shopId, msg, hanging, { timeoutMs: 50 });
+
+    expect(result).toEqual({ status: "failed" });
+    const [row] = await forShop(shopA.shopId).emailOutbox.list();
+    expect(row.status).toBe("failed");
+    expect(row.error).toMatch(/timed out/i);
+  });
+
+  it("lists the newest emails first and honours the row limit", async () => {
+    const { shopA } = await seedTwoShops();
+    const mailer = createFakeMailer();
+    for (const subject of ["one", "two", "three"]) {
+      await sendEmail(shopA.shopId, { ...msg, subject }, mailer);
+    }
+
+    const newest = await forShop(shopA.shopId).emailOutbox.list(2);
+
+    expect(newest.map((r) => r.subject)).toEqual(["three", "two"]);
+  });
+
   it("never throws, even when the outbox cannot be written", async () => {
     const result = await sendEmail("no-such-shop", msg, createFakeMailer());
     expect(result).toEqual({ status: "failed" });

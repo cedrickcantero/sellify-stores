@@ -3,6 +3,8 @@ import { forShop } from "@/data";
 import type { EmailKind, Mailer } from "@/domain/email";
 import { createResendMailer } from "./resend";
 
+const SEND_TIMEOUT_MS = 10_000;
+
 function errorText(error: unknown): string {
   const text = error instanceof Error ? error.message : String(error);
   return text.slice(0, 500) || "Unknown email error.";
@@ -17,6 +19,7 @@ export async function sendEmail(
   shopId: string,
   msg: { to: string; subject: string; html: string; kind: EmailKind },
   mailer: Mailer = createResendMailer(),
+  opts: { timeoutMs?: number } = {},
 ): Promise<{ status: "sent" | "failed" }> {
   let outbox;
   let id: string;
@@ -28,12 +31,24 @@ export async function sendEmail(
     return { status: "failed" };
   }
 
+  const timeoutMs = opts.timeoutMs ?? SEND_TIMEOUT_MS;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    await mailer.send({ to: msg.to, subject: msg.subject, html: msg.html });
+    await Promise.race([
+      mailer.send({ to: msg.to, subject: msg.subject, html: msg.html }),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`Email provider timed out after ${timeoutMs}ms.`)),
+          timeoutMs,
+        );
+      }),
+    ]);
   } catch (error) {
+    clearTimeout(timer);
     await settle(() => outbox.markFailed(id, errorText(error)));
     return { status: "failed" };
   }
+  clearTimeout(timer);
   await settle(() => outbox.markSent(id));
   return { status: "sent" };
 }
