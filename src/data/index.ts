@@ -26,6 +26,8 @@ export type {
   OfferedBrand,
 } from "./repos/buybacks";
 export {
+  DeviceModelNotFoundError,
+  RepairTypeNotFoundError,
   SlotTakenError,
   type NewTicket,
   type OfferedBrand as OfferedRepairBrand,

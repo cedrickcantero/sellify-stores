@@ -57,12 +57,13 @@ export type TicketFilter = {
   status?: RepairTicketStatus;
   /** A day, YYYY-MM-DD, in the shop's timezone. */
   date?: string;
+  /** Slot starts at or after this instant. Leaves out cancelled tickets. */
+  from?: Date;
+  limit?: number;
 };
 
 export type NewTicket = {
   repairPriceId: string;
-  /** The price shown to the customer, in cents. */
-  priceSnapshot: number;
   slotStart: Date;
   /** How many tickets the slot holds. The caller reads it from the store config. */
   capacity: number;
@@ -77,6 +78,20 @@ export class SlotTakenError extends Error {
   constructor() {
     super("That repair slot is full.");
     this.name = "SlotTakenError";
+  }
+}
+
+export class RepairTypeNotFoundError extends Error {
+  constructor() {
+    super("Repair type not found for this shop.");
+    this.name = "RepairTypeNotFoundError";
+  }
+}
+
+export class DeviceModelNotFoundError extends Error {
+  constructor() {
+    super("Device model not found.");
+    this.name = "DeviceModelNotFoundError";
   }
 }
 
@@ -96,9 +111,20 @@ export type RepairsRepo = {
   listTickets(filter?: TicketFilter): Promise<RepairTicket[]>;
   /** False when the shop has no such ticket. Throws SlotTakenError when reopening a cancelled ticket whose place was taken. */
   setTicketStatus(ticketId: string, status: RepairTicketStatus): Promise<boolean>;
-  /** Non-cancelled tickets per ISO slot start, for slot starts in [start, end). */
+  /**
+   * Non-cancelled tickets per slot start, for slot starts in [start, end).
+   * Keys are `Date.toISOString()` UTC strings, for example
+   * "2030-01-10T09:00:00.000Z".
+   */
   bookedCounts(start: Date, end: Date): Promise<Map<string, number>>;
-  /** Takes the lowest free place in the slot; pass a transaction to join other writes. */
+  /**
+   * Takes the lowest free place (1..capacity) in the slot and stores the
+   * repair price's current price, read from the database, as the ticket's
+   * price snapshot. Pass a transaction to join other writes. Callers must use
+   * the default READ COMMITTED isolation: the capacity guard relies on the
+   * unique index seeing other transactions' committed and in-flight inserts.
+   * Throws SlotTakenError when no place is free.
+   */
   insertTicket(
     tx: DbExecutor,
     input: NewTicket,
@@ -125,6 +151,13 @@ export function repairsRepo(shopId: string): RepairsRepo {
       .innerJoin(repairType, eq(repairType.id, repairPrice.repairTypeId));
   }
 
+  async function getPrice(repairPriceId: string): Promise<RepairPrice | null> {
+    const rows = await prices().where(
+      and(eq(repairPrice.id, repairPriceId), eq(repairPrice.shopId, shopId)),
+    );
+    return rows[0] ?? null;
+  }
+
   return {
     async listTypes() {
       return db
@@ -139,7 +172,9 @@ export function repairsRepo(shopId: string): RepairsRepo {
       const [row] = await db
         .select({ id: repairType.id, name: repairType.name })
         .from(repairType)
-        .where(and(eq(repairType.shopId, shopId), eq(repairType.name, name)));
+        .where(
+          and(eq(repairType.shopId, shopId), sql`lower(${repairType.name}) = lower(${name})`),
+        );
       return row;
     },
 
@@ -155,7 +190,12 @@ export function repairsRepo(shopId: string): RepairsRepo {
         .select({ id: repairType.id })
         .from(repairType)
         .where(and(eq(repairType.id, input.repairTypeId), eq(repairType.shopId, shopId)));
-      if (!type) throw new Error("Repair type not found for this shop.");
+      if (!type) throw new RepairTypeNotFoundError();
+      const [model] = await db
+        .select({ id: deviceModel.id })
+        .from(deviceModel)
+        .where(eq(deviceModel.id, input.deviceModelId));
+      if (!model) throw new DeviceModelNotFoundError();
       const [row] = await db
         .insert(repairPrice)
         .values({ shopId, ...input })
@@ -164,17 +204,12 @@ export function repairsRepo(shopId: string): RepairsRepo {
           set: { price: input.price, partQty: input.partQty, updatedAt: sql`now()` },
         })
         .returning({ id: repairPrice.id });
-      const saved = await this.getPrice(row.id);
+      const saved = await getPrice(row.id);
       if (!saved) throw new Error("Repair price vanished after saving.");
       return saved;
     },
 
-    async getPrice(repairPriceId) {
-      const rows = await prices().where(
-        and(eq(repairPrice.id, repairPriceId), eq(repairPrice.shopId, shopId)),
-      );
-      return rows[0] ?? null;
-    },
+    getPrice,
 
     async offeredModels() {
       const rows = await prices()
@@ -203,12 +238,15 @@ export function repairsRepo(shopId: string): RepairsRepo {
     async listTickets(filter = {}) {
       const conditions = [eq(repairTicket.shopId, shopId)];
       if (filter.status) conditions.push(eq(repairTicket.status, filter.status));
+      if (filter.from) {
+        conditions.push(gte(repairTicket.slotStart, filter.from), ne(repairTicket.status, "cancelled"));
+      }
       if (filter.date) {
         conditions.push(
           sql`(${repairTicket.slotStart} AT TIME ZONE (SELECT timezone FROM shop WHERE id = ${shopId}))::date = ${filter.date}::date`,
         );
       }
-      return db
+      const query = db
         .select({
           id: repairTicket.id,
           repairPriceId: repairTicket.repairPriceId,
@@ -230,7 +268,9 @@ export function repairsRepo(shopId: string): RepairsRepo {
         .innerJoin(deviceModel, eq(deviceModel.id, repairPrice.deviceModelId))
         .innerJoin(repairType, eq(repairType.id, repairPrice.repairTypeId))
         .where(and(...conditions))
-        .orderBy(asc(repairTicket.slotStart), asc(repairTicket.slotSeq));
+        .orderBy(asc(repairTicket.slotStart), asc(repairTicket.slotSeq))
+        .$dynamic();
+      return filter.limit === undefined ? query : query.limit(filter.limit);
     },
 
     async setTicketStatus(ticketId, status) {
@@ -267,7 +307,7 @@ export function repairsRepo(shopId: string): RepairsRepo {
     async insertTicket(tx, input) {
       const { capacity, ...fields } = input;
       const [price] = await tx
-        .select({ id: repairPrice.id })
+        .select({ id: repairPrice.id, price: repairPrice.price })
         .from(repairPrice)
         .where(and(eq(repairPrice.id, input.repairPriceId), eq(repairPrice.shopId, shopId)));
       if (!price) throw new Error("Repair price not found for this shop.");
@@ -290,7 +330,7 @@ export function repairsRepo(shopId: string): RepairsRepo {
         if (used.has(seq)) continue;
         const rows = await tx
           .insert(repairTicket)
-          .values({ shopId, slotSeq: seq, ...fields })
+          .values({ shopId, slotSeq: seq, priceSnapshot: price.price, ...fields })
           .onConflictDoNothing()
           .returning({ id: repairTicket.id, slotSeq: repairTicket.slotSeq });
         if (rows[0]) return rows[0];

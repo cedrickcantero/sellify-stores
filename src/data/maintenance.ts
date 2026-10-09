@@ -65,7 +65,9 @@ export async function seedDeviceCatalog(url: string): Promise<number> {
 }
 
 // Tables cleared between integration tests. The global device catalog is
-// kept. Add every new tenant table here as later tickets create it.
+// kept. Tenant tables that reference shop (products, repairs, outbox, ...)
+// are cleared too, through TRUNCATE "shop" ... CASCADE, so they need no entry
+// here. Add a table only if it has no foreign key chain to shop.
 const RESET_TABLES = [
   "email_outbox",
   "product",

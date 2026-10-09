@@ -3,7 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getActiveShop } from "@/auth/session";
-import { forShop } from "@/data";
+import {
+  DeviceModelNotFoundError,
+  forShop,
+  RepairTypeNotFoundError,
+  SlotTakenError,
+} from "@/data";
 
 export type ActionResult = { error?: string };
 
@@ -48,8 +53,14 @@ export async function saveRepairPriceAction(input: {
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   try {
     await forShop(shopId).repairs.upsertPrice(parsed.data);
-  } catch {
-    return { error: "Choose one of your repair types." };
+  } catch (error) {
+    if (error instanceof RepairTypeNotFoundError) {
+      return { error: "Choose one of your repair types." };
+    }
+    if (error instanceof DeviceModelNotFoundError) {
+      return { error: "Choose a device from the list." };
+    }
+    throw error;
   }
   revalidatePath("/repairs");
   return {};
@@ -73,8 +84,11 @@ export async function setTicketStatusAction(input: {
       parsed.data.status,
     );
     if (!found) return { error: "That ticket no longer exists." };
-  } catch {
-    return { error: "That slot was booked again. Pick a different status." };
+  } catch (error) {
+    if (error instanceof SlotTakenError) {
+      return { error: "That place was booked again. Leave this ticket cancelled." };
+    }
+    throw error;
   }
   revalidatePath("/repairs");
   return {};

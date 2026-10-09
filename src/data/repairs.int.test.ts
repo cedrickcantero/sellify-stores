@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { seedTwoShops } from "@/test/seed";
-import { deviceCatalog, forShop, SlotTakenError } from "./index";
+import {
+  deviceCatalog,
+  DeviceModelNotFoundError,
+  forShop,
+  RepairTypeNotFoundError,
+  SlotTakenError,
+} from "./index";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 
@@ -37,6 +43,17 @@ describe("repair types and prices", () => {
     const second = await repairs.createType("Screen");
 
     expect(second.id).toBe(first.id);
+    expect(await repairs.listTypes()).toHaveLength(1);
+  });
+
+  it("treats repair type names as case-insensitive", async () => {
+    const { shopA } = await seedTwoShops();
+    const repairs = forShop(shopA.shopId).repairs;
+
+    const first = await repairs.createType("Screen");
+    const second = await repairs.createType("screen");
+
+    expect(second).toEqual(first);
     expect(await repairs.listTypes()).toHaveLength(1);
   });
 
@@ -79,7 +96,10 @@ describe("repair types and prices", () => {
 
     await expect(
       repairs.upsertPrice({ deviceModelId: apple[0].id, repairTypeId: foreign.id, price: 1, partQty: 0 }),
-    ).rejects.toThrow();
+    ).rejects.toBeInstanceOf(RepairTypeNotFoundError);
+    await expect(
+      repairs.upsertPrice({ deviceModelId: "no-such-model", repairTypeId: own.id, price: 1, partQty: 0 }),
+    ).rejects.toBeInstanceOf(DeviceModelNotFoundError);
     await expect(
       repairs.upsertPrice({ deviceModelId: apple[0].id, repairTypeId: own.id, price: -1, partQty: 0 }),
     ).rejects.toThrow();
@@ -160,7 +180,6 @@ describe("insertTicket", () => {
 
     const first = await repairs.insertTicket(db, {
       repairPriceId: price.id,
-      priceSnapshot: price.price,
       slotStart: slot,
       capacity: 2,
       source: "online",
@@ -168,7 +187,6 @@ describe("insertTicket", () => {
     });
     const second = await repairs.insertTicket(db, {
       repairPriceId: price.id,
-      priceSnapshot: price.price,
       slotStart: slot,
       capacity: 2,
       source: "walk_in",
@@ -180,18 +198,46 @@ describe("insertTicket", () => {
     const tickets = await repairs.listTickets();
     expect(tickets).toHaveLength(2);
     expect(tickets[0]).toMatchObject({
-      priceSnapshot: 8900,
       status: "booked",
       customerName: "John",
       repairType: "Screen",
     });
   });
 
+  it("snapshots the price from the database and keeps it when the price changes later", async () => {
+    const { shopA } = await seedTwoShops();
+    const repairs = forShop(shopA.shopId).repairs;
+    const price = await priceFor(shopA.shopId);
+
+    await repairs.insertTicket(db, {
+      repairPriceId: price.id,
+      slotStart: slot,
+      capacity: 2,
+      source: "online",
+      ...customer,
+    });
+    await repairs.upsertPrice({
+      deviceModelId: price.deviceModelId,
+      repairTypeId: price.repairTypeId,
+      price: 12300,
+      partQty: 1,
+    });
+    await repairs.insertTicket(db, {
+      repairPriceId: price.id,
+      slotStart: slot,
+      capacity: 2,
+      source: "online",
+      ...customer,
+    });
+
+    expect((await repairs.listTickets()).map((t) => t.priceSnapshot)).toEqual([8900, 12300]);
+  });
+
   it("throws SlotTakenError when the slot is at capacity", async () => {
     const { shopA } = await seedTwoShops();
     const repairs = forShop(shopA.shopId).repairs;
     const price = await priceFor(shopA.shopId);
-    const input = { repairPriceId: price.id, priceSnapshot: 8900, slotStart: slot, capacity: 1, source: "online" as const, ...customer };
+    const input = { repairPriceId: price.id, slotStart: slot, capacity: 1, source: "online" as const, ...customer };
 
     await repairs.insertTicket(db, input);
 
@@ -203,7 +249,7 @@ describe("insertTicket", () => {
     const { shopA } = await seedTwoShops();
     const repairs = forShop(shopA.shopId).repairs;
     const price = await priceFor(shopA.shopId);
-    const input = { repairPriceId: price.id, priceSnapshot: 8900, slotStart: slot, capacity: 2, source: "online" as const, ...customer };
+    const input = { repairPriceId: price.id, slotStart: slot, capacity: 2, source: "online" as const, ...customer };
 
     const results = await Promise.allSettled(Array.from({ length: 6 }, () => repairs.insertTicket(db, input)));
 
@@ -222,7 +268,7 @@ describe("insertTicket", () => {
 
     await expect(
       db.transaction(async (tx) => {
-        await repairs.insertTicket(tx, { repairPriceId: price.id, priceSnapshot: 1, slotStart: slot, capacity: 1, source: "online", ...customer });
+        await repairs.insertTicket(tx, { repairPriceId: price.id, slotStart: slot, capacity: 1, source: "online", ...customer });
         throw new Error("abort");
       }),
     ).rejects.toThrow("abort");
@@ -236,7 +282,7 @@ describe("insertTicket", () => {
 
     await expect(
       forShop(shopA.shopId).repairs.insertTicket(db, {
-        repairPriceId: foreign.id, priceSnapshot: 1, slotStart: slot, capacity: 1, source: "online", ...customer,
+        repairPriceId: foreign.id, slotStart: slot, capacity: 1, source: "online", ...customer,
       }),
     ).rejects.toThrow();
   });
@@ -248,7 +294,7 @@ describe("bookedCounts", () => {
     const repairs = forShop(shopA.shopId).repairs;
     const price = await priceFor(shopA.shopId);
     const foreignPrice = await priceFor(shopB.shopId);
-    const base = { repairPriceId: price.id, priceSnapshot: 1, capacity: 5, source: "online" as const, ...customer };
+    const base = { repairPriceId: price.id, capacity: 5, source: "online" as const, ...customer };
     const nine = new Date("2030-01-10T09:00:00.000Z");
     const ten = new Date("2030-01-10T10:00:00.000Z");
     const nextDay = new Date("2030-01-11T09:00:00.000Z");
@@ -268,7 +314,7 @@ describe("bookedCounts", () => {
     const { shopA } = await seedTwoShops();
     const repairs = forShop(shopA.shopId).repairs;
     const price = await priceFor(shopA.shopId);
-    const input = { repairPriceId: price.id, priceSnapshot: 1, slotStart: slot, capacity: 1, source: "online" as const, ...customer };
+    const input = { repairPriceId: price.id, slotStart: slot, capacity: 1, source: "online" as const, ...customer };
     const ticket = await repairs.insertTicket(db, input);
     await repairs.setTicketStatus(ticket.id, "cancelled");
 
@@ -280,11 +326,33 @@ describe("bookedCounts", () => {
 });
 
 describe("tickets", () => {
+  it("filters upcoming tickets with from and limit, leaving out cancelled ones", async () => {
+    const { shopA } = await seedTwoShops();
+    const a = forShop(shopA.shopId).repairs;
+    const price = await priceFor(shopA.shopId);
+    const base = { repairPriceId: price.id, capacity: 3, source: "walk_in" as const, ...customer };
+    const at = (hour: string) => new Date(`2030-01-10T${hour}:00:00.000Z`);
+    await a.insertTicket(db, { ...base, slotStart: at("08") });
+    const cancelled = await a.insertTicket(db, { ...base, slotStart: at("10") });
+    await a.insertTicket(db, { ...base, slotStart: at("12") });
+    await a.insertTicket(db, { ...base, slotStart: at("14") });
+    await a.setTicketStatus(cancelled.id, "cancelled");
+
+    const upcoming = await a.listTickets({ from: at("09"), limit: 2 });
+
+    expect(upcoming.map((t) => t.slotStart.toISOString())).toEqual([
+      at("12").toISOString(),
+      at("14").toISOString(),
+    ]);
+    expect(await a.listTickets({ limit: 1 })).toHaveLength(1);
+    expect(await a.listTickets({ from: at("09"), status: "cancelled" })).toHaveLength(0);
+  });
+
   it("changes status only for this shop's tickets", async () => {
     const { shopA, shopB } = await seedTwoShops();
     const priceA = await priceFor(shopA.shopId);
     const a = forShop(shopA.shopId).repairs;
-    const ticket = await a.insertTicket(db, { repairPriceId: priceA.id, priceSnapshot: 1, slotStart: slot, capacity: 1, source: "online", ...customer });
+    const ticket = await a.insertTicket(db, { repairPriceId: priceA.id, slotStart: slot, capacity: 1, source: "online", ...customer });
 
     expect(await forShop(shopB.shopId).repairs.setTicketStatus(ticket.id, "done")).toBe(false);
     expect((await a.listTickets())[0].status).toBe("booked");
@@ -298,7 +366,7 @@ describe("tickets", () => {
     await db.execute(sql`UPDATE shop SET timezone = 'Pacific/Auckland' WHERE id = ${shopA.shopId}`);
     const a = forShop(shopA.shopId).repairs;
     const price = await priceFor(shopA.shopId);
-    const base = { repairPriceId: price.id, priceSnapshot: 1, capacity: 3, source: "walk_in" as const, ...customer };
+    const base = { repairPriceId: price.id, capacity: 3, source: "walk_in" as const, ...customer };
     // 2030-01-10T20:00Z is 2030-01-11 09:00 in Auckland (UTC+13 in January).
     const onEleventh = await a.insertTicket(db, { ...base, slotStart: new Date("2030-01-10T20:00:00.000Z") });
     await a.insertTicket(db, { ...base, slotStart: new Date("2030-01-10T10:00:00.000Z") });

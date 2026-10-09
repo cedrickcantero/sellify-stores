@@ -17,7 +17,8 @@ export const repairType = pgTable(
     name: text().notNull(),
     createdAt: timestamp().notNull().defaultNow(),
   },
-  (t) => [unique("repair_type_shop_name_unique").on(t.shopId, t.name)],
+  // Names are unique per shop ignoring case: "Screen" and "screen" are one type.
+  (t) => [uniqueIndex("repair_type_shop_name_unique").on(t.shopId, sql`lower(${t.name})`)],
 );
 
 // What a shop charges for one repair on one model. Money is integer cents.
