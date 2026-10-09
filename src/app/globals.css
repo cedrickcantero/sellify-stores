@@ -1,0 +1,139 @@
+@import "tailwindcss";
+
+/* Sellify platform design tokens. The written guideline is
+   docs/brand/sellify.md. Backend pages and src/ui use only these tokens;
+   a lint rule rejects raw colour values there. */
+
+:root {
+  /* Brand */
+  --primary: #9333ea; /* purple-600 */
+  --primary-hover: #7e22ce; /* purple-700 */
+  --primary-tint: #faf5ff; /* purple-50 */
+  --primary-border: #d8b4fe; /* purple-300 */
+  --primary-foreground: #ffffff;
+
+  /* Text */
+  --foreground: #171717; /* neutral-900 */
+  --muted-foreground: #6b7280; /* gray-500, on white or gray-50 only */
+  --secondary-foreground: #4b5563; /* gray-600, text on surface-muted */
+
+  /* Surfaces and lines */
+  --background: #f9fafb; /* gray-50, page background */
+  --surface: #ffffff; /* cards, tables, inputs, sidebar */
+  --surface-muted: #f3f4f6; /* gray-100, hover rows, neutral pills */
+  --border: #e5e7eb; /* gray-200, decorative lines between surfaces */
+  --input: #868c96; /* control borders and the off switch track: 3:1 on white (WCAG 1.4.11) */
+  --ring: #9333ea;
+
+  /* Status. The base colour is for dots, fills and borders; text on a
+     status tint uses the darker *-text token so it meets 4.5:1. */
+  --success: #16a34a;
+  --success-text: #15803d; /* green-700 */
+  --success-tint: #f0fdf4;
+  --warning: #d97706;
+  --warning-text: #b45309; /* amber-700 */
+  --warning-tint: #fffbeb;
+  --error: #dc2626; /* also field error text on white */
+  --error-hover: #b91c1c;
+  --error-text: #b91c1c; /* red-700 */
+  --error-tint: #fef2f2;
+  --overlay: rgb(23 23 23 / 0.4);
+}
+
+@theme {
+  /* Only Sellify tokens exist as colours: the default Tailwind palette is
+     switched off, so text-purple-600 or bg-white produce nothing. */
+  --color-*: initial;
+}
+
+@theme inline {
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-tint: var(--primary-tint);
+  --color-primary-border: var(--primary-border);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-foreground: var(--foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-success-text: var(--success-text);
+  --color-success-tint: var(--success-tint);
+  --color-warning: var(--warning);
+  --color-warning-text: var(--warning-text);
+  --color-warning-tint: var(--warning-tint);
+  --color-error: var(--error);
+  --color-error-hover: var(--error-hover);
+  --color-error-text: var(--error-text);
+  --color-error-tint: var(--error-tint);
+  --color-overlay: var(--overlay);
+
+  /* Fonts (loaded in src/app/layout.tsx) */
+  --font-heading: var(--font-plus-jakarta), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+@theme {
+  /* Spacing: Tailwind's 4px scale (p-1 = 4px, p-4 = 16px, gap-6 = 24px). */
+  --spacing: 0.25rem;
+
+  /* Type scale: text-page-title, text-section, text-body, text-small */
+  --text-page-title: 1.5rem;
+  --text-page-title--line-height: 2rem;
+  --text-page-title--font-weight: 700;
+  --text-section: 1.125rem;
+  --text-section--line-height: 1.75rem;
+  --text-section--font-weight: 600;
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.25rem;
+  --text-small: 0.75rem;
+  --text-small--line-height: 1rem;
+
+  /* Radius: rounded-control (buttons, inputs, selects), rounded-card
+     (cards, tables, modals), rounded-full (pills, badges, switches) */
+  --radius-control: 8px;
+  --radius-card: 12px;
+
+  /* Shadows: two levels. shadow-card for resting surfaces, shadow-overlay
+     for modals, menus and popovers. */
+  --shadow-card: 0 1px 2px 0 rgb(16 24 40 / 0.05);
+  --shadow-overlay: 0 12px 24px -4px rgb(16 24 40 / 0.12), 0 4px 8px -2px rgb(16 24 40 / 0.06);
+
+  /* Layout */
+  --container-content: 1200px;
+  --spacing-sidebar: 240px;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    background: var(--background);
+  }
+
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-heading);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}

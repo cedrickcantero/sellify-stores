@@ -1,0 +1,11 @@
+flowchart TB
+    start(["Owner opens signup"]) --> create["Create the shop<br/>validated and rate limited"]
+    create --> valid{"Details valid?"}
+    valid -->|No| fix["Show what to fix"] --> create
+    valid -->|Yes| ready["Shop account ready<br/>session picks the shop"]
+    ready --> prices["Add products and prices<br/>inventory, repairs, buybacks"]
+    prices --> edit["Edit store design<br/>private draft and preview"]
+    edit --> preview{"Preview right?"}
+    preview -->|No| keep["Keep editing"] --> edit
+    preview -->|Yes| publish["Publish store"]
+    publish --> live(["Store live at its address"])

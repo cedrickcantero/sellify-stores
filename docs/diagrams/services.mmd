@@ -1,0 +1,26 @@
+flowchart TB
+    owner(["Shop owner<br/>Sellify backend"])
+    customer(["Customer<br/>public store"])
+    subgraph vercel["Vercel, Frankfurt"]
+        proxy["Proxy<br/>finds the shop, adds headers"]
+        backend["Backend pages<br/>Sellify design system"]
+        store["Store pages<br/>each store's own brand"]
+        services["Services and auth<br/>bookings, quotes, checkout"]
+        data["Data module<br/>queries scoped to one shop"]
+        proxy --> backend
+        proxy --> store
+        backend --> services
+        store --> services
+        services --> data
+    end
+    stripe[("Stripe<br/>Checkout, test mode")]
+    resend[("Resend<br/>email delivery")]
+    blob[("Vercel Blob<br/>logos and photos")]
+    neon[("Neon Postgres<br/>Frankfurt")]
+    owner --> proxy
+    customer --> proxy
+    customer -->|pays on| stripe
+    stripe -->|signed webhook| services
+    services -->|after the save commits| resend
+    services --> blob
+    data --> neon

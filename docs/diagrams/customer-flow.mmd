@@ -1,0 +1,17 @@
+flowchart TB
+    open(["Customer opens store"]) --> resolve["Server finds the shop<br/>adds security headers"]
+    resolve --> tab{"Which tab?"}
+    tab -->|Shop| basket["Add to basket<br/>prices from database"]
+    basket --> checkout["Stripe checkout<br/>rate limit, honeypot"]
+    checkout --> webhook["Signed webhook<br/>one sale, stock down"]
+    tab -->|Repair| repair["Choose the repair<br/>shop's own price"]
+    repair --> slot["Pick day and time<br/>rate limit, honeypot"]
+    slot --> ticket["Ticket created<br/>no double booking"]
+    tab -->|Sell| model["Model and condition<br/>inputs validated"]
+    model --> offer["See the offer<br/>set by the server"]
+    offer --> accept["Offer accepted<br/>sends only the quote id"]
+    webhook --> emails["Emails sent<br/>after the save commits"]
+    ticket --> emails
+    accept --> emails
+    emails --> backoffice["Owner sees it<br/>only in their own shop"]
+    backoffice --> done(["Customer flow done"])
