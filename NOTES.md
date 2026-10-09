@@ -35,7 +35,7 @@ future expiry date and any CVC.
 
 ### How it was checked
 
-- 412 unit tests and 244 integration tests against a real Postgres
+- 417 unit tests and 244 integration tests against a real Postgres
   database (Neon), including tenant isolation, price tampering, concurrent
   bookings and checkouts, Stripe webhook replays, and stock running out
   mid-payment.
@@ -70,6 +70,60 @@ future expiry date and any CVC.
   an order.
 - **Abuse:** booking, quote and checkout are rate limited per IP and carry a
   honeypot field.
+
+## Security
+
+What is protected, and how:
+
+- **One shop never sees another's data.** Only `src/data` may query the
+  database (an ESLint rule fails the build otherwise), and every query goes
+  through `forShop(shopId)`. The shop id comes from the login session or is
+  resolved on the server from the store address, never from the browser.
+  Integration tests seed two shops and check that nothing crosses over. Draft
+  previews are shown only to members of that shop and are never cached.
+- **Customers cannot change prices.** Baskets hold only product ids and
+  quantities; prices are read from the database at the moment of each action.
+  Buyback offers are stored on the server and accepting sends only the quote
+  id. Checkout reprices before creating the Stripe session, and fulfilment
+  checks the amount Stripe charged.
+- **Payments.** The webhook verifies Stripe's signature on the raw request
+  body; one sale per Stripe session, so a replayed event creates nothing;
+  card payments only; return URLs come from configured addresses, never the
+  request's Host header; a paid order is always recorded.
+- **Input and abuse.** Every server action and route validates its input with
+  Zod, with length limits. Booking, quote, checkout and slot lookups are rate
+  limited per IP and carry a honeypot field; login is rate limited per email,
+  per IP and per both. Double bookings and double-accepted quotes are
+  prevented in the database and tested under concurrency.
+- **Injection.** React escapes rendered text and emails are built with an
+  escaping helper. Uploaded SVG logos are sanitised on the server with an
+  allow-list. Store colours must be hex values and fonts come from a fixed
+  list, so brand settings cannot inject CSS. Image URLs must point at the
+  project's own Blob store. Database queries are parameterised.
+- **Security headers** on every response: an enforced Content Security Policy
+  (no framing, no plugins, scripts and connections only from the app, images
+  only from the app and its Blob store, forms only to the app and Stripe
+  Checkout), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, a
+  strict referrer policy, a permissions policy, and HSTS. The policy ran in
+  report-only mode on the live site first and was enforced once a click-through
+  showed no violations.
+- **Secrets** live only in environment variables (sensitive on Vercel, never
+  committed or logged). Stripe is in test mode. Integration tests refuse to
+  run against a database that is not marked as a test database.
+
+Known gaps, in the order I would close them:
+
+1. The CSP allows inline scripts, because the Next.js App Router streams its
+   page data in inline scripts. Moving to per-request nonces would remove
+   that allowance.
+2. Signups do not verify the email address yet (Better Auth supports it; it
+   needs a verification page and email).
+3. Confirmation emails go to the address the customer types. Rate limits
+   slow abuse, but a per-recipient limit would close it.
+4. Rate limits key on the client IP that Vercel provides; other hosting would
+   need the same trusted header.
+5. Each ticket had an adversarial code review, but there has been no
+   independent penetration test.
 
 ## Not done, and how I would build it
 
