@@ -33,8 +33,8 @@ export {
 export { authDatabaseAdapter } from "./auth-adapter";
 
 // Repositories for one tenant. Every query a repository runs is filtered by
-// the shop id given here; later tickets add repairs, buybacks, sales, store
-// config, domains and the email outbox.
+// the shop id given here; later tickets add repairs, sales, store config and
+// domains.
 export type ShopRepos = {
   shop: ShopRepo;
   emailOutbox: EmailOutboxRepo;
