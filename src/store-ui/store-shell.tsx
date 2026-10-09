@@ -34,8 +34,11 @@ export function StoreShell({
   config,
   basePath,
   preview = false,
+  basketCount,
   children,
 }: {
+  /** Items in the basket; the Basket link shows only when the Shop tab is on. */
+  basketCount?: number;
   config: StoreConfig;
   /** "/s/<slug>" on the path address, "" on a store host. */
   basePath: string;
@@ -82,6 +85,16 @@ export function StoreShell({
                     </Link>
                   </li>
                 ))}
+                {config.tabs.shop && basketCount !== undefined ? (
+                  <li>
+                    <Link
+                      href={storeHref(basePath, "/basket")}
+                      className="inline-flex h-10 items-center rounded-(--store-radius) px-4 font-semibold hover:bg-(--store-primary) hover:text-(--store-on-primary)"
+                    >
+                      Basket{basketCount > 0 ? <span className="ml-1">({basketCount})</span> : null}
+                    </Link>
+                  </li>
+                ) : null}
               </ul>
             </nav>
           ) : null}
