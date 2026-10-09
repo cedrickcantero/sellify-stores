@@ -1,5 +1,5 @@
 import { hashPassword } from "better-auth/crypto";
-import { insertShopWithOwner } from "@/data/maintenance";
+import { cancelBuybackQuote as cancelQuote, insertShopWithOwner } from "@/data/maintenance";
 import { slugify } from "@/domain/slug";
 
 export type TestShop = {
@@ -46,4 +46,9 @@ export async function seedTwoShops(): Promise<{ shopA: TestShop; shopB: TestShop
     seedShop(url, passwordHash, "Phone Clinic Cork", "Brian Owner", "owner-b@example.com"),
   ]);
   return { shopA, shopB };
+}
+
+// Cancels a buyback quote (nothing in the app does yet).
+export async function cancelBuybackQuote(quoteId: string): Promise<void> {
+  await cancelQuote(process.env.TEST_DATABASE_URL!, quoteId);
 }

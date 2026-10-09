@@ -181,6 +181,12 @@ export async function ageRateLimitBucket(url: string, key: string, hours: number
   );
 }
 
+// Test helper: cancels a buyback quote. Nothing in the app cancels one yet.
+export async function cancelBuybackQuote(url: string, quoteId: string): Promise<void> {
+  await assertMarkedOnce(url);
+  await sharedDatabase(url).execute(sql`update buyback_quote set status = 'cancelled' where id = ${quoteId}`);
+}
+
 export async function resetTenantData(url: string): Promise<void> {
   const tables = RESET_TABLES.map((t) => `"${t}"`).join(", ");
   // The marker check and the truncate run as one statement, so the check

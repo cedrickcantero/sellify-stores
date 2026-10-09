@@ -42,9 +42,7 @@ export default async function OfferPage({ params }: PageProps<"/s/[slug]/sell/of
             <p className="text-xl">
               <span className="font-bold">{formatEuros(quote.offer)}</span> for your {device}
             </p>
-            <p>
-              Drop in to the shop with your phone and we will pay you. We have emailed you a confirmation.
-            </p>
+            <p>Drop in to the shop with your phone and we will pay you.</p>
           </>
         )}
       </div>

@@ -1,7 +1,9 @@
 "use client";
 
-import { useActionState } from "react";
-import { HoneypotField, storeButtonClass, storeControlClass } from "@/store-ui";
+import { useActionState, useState } from "react";
+import { storeButtonClass, storeControlClass } from "@/store-ui/form-controls";
+import { ErrorSummary } from "@/store-ui/error-summary";
+import { HoneypotField } from "@/store-ui/honeypot-field";
 import { acceptOffer, type SellFormState } from "../../actions";
 
 const IDLE: SellFormState = { status: "idle" };
@@ -17,6 +19,8 @@ const FIELDS = [
 export function AcceptForm({ slug, quoteId }: { slug: string; quoteId: string }) {
   const [state, action, pending] = useActionState(acceptOffer, IDLE);
   const errors = state.fieldErrors ?? {};
+  // Controlled, so a rejected submit does not wipe what was typed.
+  const [values, setValues] = useState<Record<string, string>>({ name: "", phone: "", email: "" });
 
   return (
     <form action={action} className="flex max-w-xl flex-col gap-5" noValidate>
@@ -24,11 +28,7 @@ export function AcceptForm({ slug, quoteId }: { slug: string; quoteId: string })
       <input type="hidden" name="quoteId" value={quoteId} />
       <HoneypotField />
 
-      {state.message ? (
-        <p role="alert" className="rounded-(--store-radius) border-2 border-(--store-text) p-3 font-semibold">
-          {state.message}
-        </p>
-      ) : null}
+      <ErrorSummary message={state.message} errors={Object.values(errors)} />
 
       {FIELDS.map((field) => (
         <div key={field.name} className="flex flex-col gap-1.5">
@@ -41,6 +41,8 @@ export function AcceptForm({ slug, quoteId }: { slug: string; quoteId: string })
             type={field.type}
             autoComplete={field.autoComplete}
             required
+            value={values[field.name]}
+            onChange={(e) => setValues((v) => ({ ...v, [field.name]: e.target.value }))}
             className={storeControlClass}
             aria-invalid={errors[field.name] ? true : undefined}
             aria-describedby={errors[field.name] ? `accept-${field.name}-error` : undefined}

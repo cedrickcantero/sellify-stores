@@ -2,7 +2,7 @@
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { parseBuybackCustomer, parseQuoteInput } from "@/domain/buyback-forms";
+import { parseBuybackCustomer, parseQuoteId, parseQuoteInput } from "@/domain/buyback-forms";
 import { BUYBACK_QUESTIONS } from "@/domain/buyback-questions";
 import { createQuote, submitBuyback } from "@/services/buyback";
 import { clientIp, isHoneypotTripped, rateLimit } from "@/services/abuse";
@@ -56,6 +56,7 @@ export async function getOffer(_previous: SellFormState, form: FormData): Promis
   }
 
   const quote = await createQuote(shopId, parsed.value);
+  if (!quote.ok && quote.error === "invalid") return { status: "error", message: TRY_AGAIN };
   if (!quote.ok) {
     return { status: "error", message: "We are not buying that phone right now. Choose another model or storage size." };
   }
@@ -78,11 +79,15 @@ export async function acceptOffer(_previous: SellFormState, form: FormData): Pro
   });
   if (!customer.ok) return { status: "error", fieldErrors: customer.fieldErrors };
 
-  const quoteId = text(form, "quoteId");
+  const quoteId = parseQuoteId(text(form, "quoteId"));
+  if (!quoteId) return { status: "error", message: "We could not find that offer. Get a new one." };
   const result = await submitBuyback(shopId, quoteId, customer.value);
-  if (!result.ok && result.error === "not_found") {
+  if (!result.ok && (result.error === "not_found" || result.error === "cancelled")) {
     return { status: "error", message: "We could not find that offer. Get a new one." };
   }
-  // Accepted, expired or already accepted: the offer page shows which.
+  if (!result.ok && result.error === "already_accepted") {
+    return { status: "error", message: "This offer was already accepted." };
+  }
+  // Accepted or expired: the offer page shows which.
   redirect(offerPath(basePath, quoteId));
 }

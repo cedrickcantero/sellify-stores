@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { deviceCatalog, forShop } from "@/data";
 import { createFakeMailer } from "@/email";
 import { defaultStoreConfig } from "@/domain/store-config";
-import { seedTwoShops } from "@/test/seed";
+import { cancelBuybackQuote, seedTwoShops } from "@/test/seed";
 import { createQuote, submitBuyback } from "./buyback";
 
 const CUSTOMER = { name: "Niamh <b>Walsh</b>", phone: "085 123 4567", email: "niamh@example.com" };
@@ -78,12 +78,12 @@ describe("createQuote", () => {
     expect(await forShop(shopA.shopId).buybacks.listQuotes()).toEqual([]);
   });
 
-  it("rejects answers that are missing or not booleans", async () => {
+  it("reports bad input as invalid, not as an unoffered phone", async () => {
     const { shopA } = await seedTwoShops();
     const model = await shopBuyingIphone(shopA.shopId);
     const bad = { ...input(model.id), answers: { screen_cracked: true, battery_ok: "yes" } };
 
-    expect(await createQuote(shopA.shopId, bad as never)).toEqual({ ok: false, error: "not_offered" });
+    expect(await createQuote(shopA.shopId, bad as never)).toEqual({ ok: false, error: "invalid" });
     expect(await forShop(shopA.shopId).buybacks.listQuotes()).toEqual([]);
   });
 });
@@ -188,6 +188,19 @@ describe("submitBuyback", () => {
     expect(results.filter((r) => r.ok)).toHaveLength(1);
     expect(results.find((r) => !r.ok)).toEqual({ ok: false, error: "already_accepted" });
     expect(await forShop(shopA.shopId).emailOutbox.list()).toHaveLength(2);
+  });
+
+  it("reports a cancelled quote as cancelled, not as already accepted", async () => {
+    const { shopA } = await seedTwoShops();
+    const quote = await quoted(shopA.shopId);
+    await cancelBuybackQuote(quote.quoteId);
+    const mailer = createFakeMailer();
+
+    expect(await submitBuyback(shopA.shopId, quote.quoteId, CUSTOMER, { mailer })).toEqual({
+      ok: false,
+      error: "cancelled",
+    });
+    expect(mailer.sent).toHaveLength(0);
   });
 
   it("rejects a quote the shop already received", async () => {

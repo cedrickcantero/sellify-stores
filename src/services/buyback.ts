@@ -18,14 +18,15 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 type Deps = { now?: Date; mailer?: Mailer };
 
 // Calculates the offer for a phone and stores the quote. Invalid input, or a
-// model and storage the shop does not buy, is not_offered.
+// model and storage the shop does not buy, is not_offered; malformed input
+// is invalid.
 export async function createQuote(
   shopId: string,
   input: { deviceModelId: string; storage: string; answers: Record<string, boolean> },
   deps: Pick<Deps, "now"> = {},
-): Promise<Result<{ quoteId: string; offer: number; expiresAt: Date }, "not_offered">> {
+): Promise<Result<{ quoteId: string; offer: number; expiresAt: Date }, "not_offered" | "invalid">> {
   const parsed = parseQuoteInput(input);
-  if (!parsed.ok) return err("not_offered");
+  if (!parsed.ok) return err("invalid");
   const { deviceModelId, storage, answers } = parsed.value;
 
   const buybacks = forShop(shopId).buybacks;
@@ -55,7 +56,7 @@ export async function submitBuyback(
   quoteId: string,
   customer: { name: string; phone: string; email: string },
   deps: Deps = {},
-): Promise<Result<{ quoteId: string }, "not_found" | "expired" | "already_accepted">> {
+): Promise<Result<{ quoteId: string }, "not_found" | "expired" | "already_accepted" | "cancelled">> {
   const parsed = parseBuybackCustomer(customer);
   if (!parsed.ok) throw new Error("submitBuyback needs a validated customer.");
 
@@ -64,6 +65,7 @@ export async function submitBuyback(
   if (!quote) return err("not_found");
 
   const now = deps.now ?? new Date();
+  if (quote.status === "cancelled") return err("cancelled");
   if (quote.status !== "quoted") return err("already_accepted");
   if (quote.expiresAt <= now) return err("expired");
 
