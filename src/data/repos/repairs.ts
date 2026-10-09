@@ -109,6 +109,8 @@ export type RepairsRepo = {
   getPrice(repairPriceId: string): Promise<RepairPrice | null>;
   offeredModels(): Promise<OfferedBrand[]>;
   listTickets(filter?: TicketFilter): Promise<RepairTicket[]>;
+  /** How many tickets match the filter (`limit` is ignored). */
+  countTickets(filter?: TicketFilter): Promise<number>;
   /** False when the shop has no such ticket. Throws SlotTakenError when reopening a cancelled ticket whose place was taken. */
   setTicketStatus(ticketId: string, status: RepairTicketStatus): Promise<boolean>;
   /**
@@ -132,6 +134,20 @@ export type RepairsRepo = {
 };
 
 export function repairsRepo(shopId: string): RepairsRepo {
+  function ticketConditions(filter: TicketFilter) {
+    const conditions = [eq(repairTicket.shopId, shopId)];
+    if (filter.status) conditions.push(eq(repairTicket.status, filter.status));
+    if (filter.from) {
+      conditions.push(gte(repairTicket.slotStart, filter.from), ne(repairTicket.status, "cancelled"));
+    }
+    if (filter.date) {
+      conditions.push(
+        sql`(${repairTicket.slotStart} AT TIME ZONE (SELECT timezone FROM shop WHERE id = ${shopId}))::date = ${filter.date}::date`,
+      );
+    }
+    return conditions;
+  }
+
   const priceSelect = {
     id: repairPrice.id,
     deviceModelId: repairPrice.deviceModelId,
@@ -235,17 +251,16 @@ export function repairsRepo(shopId: string): RepairsRepo {
       return brands;
     },
 
+    async countTickets(filter = {}) {
+      const [row] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(repairTicket)
+        .where(and(...ticketConditions(filter)));
+      return row.count;
+    },
+
     async listTickets(filter = {}) {
-      const conditions = [eq(repairTicket.shopId, shopId)];
-      if (filter.status) conditions.push(eq(repairTicket.status, filter.status));
-      if (filter.from) {
-        conditions.push(gte(repairTicket.slotStart, filter.from), ne(repairTicket.status, "cancelled"));
-      }
-      if (filter.date) {
-        conditions.push(
-          sql`(${repairTicket.slotStart} AT TIME ZONE (SELECT timezone FROM shop WHERE id = ${shopId}))::date = ${filter.date}::date`,
-        );
-      }
+      const conditions = ticketConditions(filter);
       const query = db
         .select({
           id: repairTicket.id,

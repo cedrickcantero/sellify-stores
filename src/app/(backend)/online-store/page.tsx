@@ -1,20 +1,12 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import { getActiveShop } from "@/auth/session";
 import { hostEnv, storeAddress } from "@/domain/store-host";
 import { getStoreSettings, hasUnpublishedChanges } from "@/services/store";
 import { PageHeader } from "@/ui";
+import { currentOrigin } from "../current-origin";
 import { StoreEditor } from "./store-editor";
 
 export const metadata: Metadata = { title: "Online Store | Sellify" };
-
-// The live address shown to the owner: the store subdomain when a store
-// root domain is configured, otherwise /s/<slug> on this host.
-async function currentOrigin(): Promise<string> {
-  const h = await headers();
-  const proto = h.get("x-forwarded-proto")?.split(",")[0] ?? "http";
-  return `${proto}://${h.get("host") ?? "localhost:3000"}`;
-}
 
 export default async function OnlineStorePage() {
   const { shopId, shop } = await getActiveShop();

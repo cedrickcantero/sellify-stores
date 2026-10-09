@@ -200,3 +200,12 @@ export async function resetTenantData(url: string): Promise<void> {
     END $$`),
   );
 }
+
+// Test helper: moves a sale to a chosen moment (UTC), so a test can place
+// sales on either side of a shop's local midnight.
+export async function setSaleCreatedAt(url: string, saleId: string, createdAt: Date): Promise<void> {
+  await assertMarkedOnce(url);
+  await sharedDatabase(url).execute(
+    sql`update sale set created_at = ${createdAt.toISOString()}::timestamp where id = ${saleId}`,
+  );
+}

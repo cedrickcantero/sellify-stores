@@ -149,11 +149,11 @@ export function salesRepo(shopId: string): SalesRepo {
       const [row] = await db
         .select({
           count: sql<number>`count(*)::int`,
-          total: sql<number>`coalesce(sum(${sale.total}), 0)::int`,
+          total: sql<number>`coalesce(sum(${sale.total}), 0)::bigint`,
         })
         .from(sale)
         .where(salesWhere(shopId, filter));
-      return { count: row.count, total: row.total };
+      return { count: row.count, total: Number(row.total) };
     },
 
     async list(filter = {}) {

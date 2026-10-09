@@ -74,7 +74,9 @@ export type BuybackRepo = {
    * double accept can win only once.
    */
   acceptQuote(id: string, customer: BuybackCustomer, now?: Date): Promise<boolean>;
-  listQuotes(filter?: { statuses?: BuybackStatus[] }): Promise<BuybackQuoteListItem[]>;
+  listQuotes(filter?: { statuses?: BuybackStatus[]; limit?: number }): Promise<BuybackQuoteListItem[]>;
+  /** How many quotes have one of the statuses (all of them when none given). */
+  countQuotes(filter?: { statuses?: BuybackStatus[] }): Promise<number>;
   /** Moves an accepted quote to received. Returns false for any other state. */
   markReceived(id: string): Promise<boolean>;
 };
@@ -267,10 +269,20 @@ export function buybackRepo(shopId: string): BuybackRepo {
       return rows.length === 1;
     },
 
+    async countQuotes(filter) {
+      const conditions = [eq(buybackQuote.shopId, shopId)];
+      if (filter?.statuses?.length) conditions.push(inArray(buybackQuote.status, filter.statuses));
+      const [row] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(buybackQuote)
+        .where(and(...conditions));
+      return row.count;
+    },
+
     async listQuotes(filter) {
       const conditions = [eq(buybackQuote.shopId, shopId)];
       if (filter?.statuses?.length) conditions.push(inArray(buybackQuote.status, filter.statuses));
-      const rows = await db
+      const query = db
         .select({
           quote: buybackQuote,
           brand: deviceModel.brand,
@@ -279,7 +291,9 @@ export function buybackRepo(shopId: string): BuybackRepo {
         .from(buybackQuote)
         .innerJoin(deviceModel, eq(deviceModel.id, buybackQuote.deviceModelId))
         .where(and(...conditions))
-        .orderBy(desc(sql`coalesce(${buybackQuote.acceptedAt}, ${buybackQuote.createdAt})`));
+        .orderBy(desc(sql`coalesce(${buybackQuote.acceptedAt}, ${buybackQuote.createdAt})`))
+        .$dynamic();
+      const rows = await (filter?.limit === undefined ? query : query.limit(filter.limit));
       return rows.map((r) => ({ ...toQuote(r.quote), brand: r.brand, deviceName: r.deviceName }));
     },
 

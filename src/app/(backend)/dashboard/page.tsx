@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { headers } from "next/headers";
 import { getActiveShop } from "@/auth/session";
 import { formatCents } from "@/domain/product";
 import { getDashboardSummary } from "@/services/dashboard";
@@ -19,22 +18,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/ui";
+import { currentOrigin } from "../current-origin";
 
 export const metadata: Metadata = { title: "Dashboard | Sellify" };
 
-const SHOWN_BUYBACKS = 5;
-
-async function currentOrigin(): Promise<string> {
-  const h = await headers();
-  const proto = h.get("x-forwarded-proto")?.split(",")[0] ?? "http";
-  return `${proto}://${h.get("host") ?? "localhost:3000"}`;
-}
-
 export default async function DashboardPage() {
   const { shopId, shop } = await getActiveShop();
-  const summary = await getDashboardSummary(shopId, {
-    origin: await currentOrigin(),
-  });
+  const summary = await getDashboardSummary(shopId, { origin: await currentOrigin(), shop });
   const slotFormat = new Intl.DateTimeFormat("en-IE", {
     dateStyle: "medium",
     timeStyle: "short",
@@ -61,7 +51,7 @@ export default async function DashboardPage() {
         />
         <StatCard
           label="Upcoming repairs"
-          value={upcomingRepairs.length}
+          value={summary.upcomingRepairCount}
           note={
             <Link href="/repairs" className="underline">
               View repairs
@@ -70,7 +60,7 @@ export default async function DashboardPage() {
         />
         <StatCard
           label="Buybacks to receive"
-          value={pendingBuybacks.length}
+          value={summary.pendingBuybackCount}
           note={
             <Link href="/buybacks" className="underline">
               View buybacks
@@ -97,7 +87,9 @@ export default async function DashboardPage() {
             <p className="text-body text-muted-foreground">
               {store.online
                 ? "Your store is live."
-                : "Your store is offline. Publish it to take online orders."}
+                : store.published
+                  ? "Your store is offline. Turn it on to take online orders."
+                  : "Your store is offline. Publish it to take online orders."}
             </p>
           )}
         </div>
@@ -107,7 +99,7 @@ export default async function DashboardPage() {
         title="Upcoming repairs"
         actions={
           <Button asChild variant="ghost" size="sm">
-            <Link href="/repairs">View all</Link>
+            <Link href="/repairs?view=tickets">View all</Link>
           </Button>
         }
       >
@@ -117,13 +109,19 @@ export default async function DashboardPage() {
               <TableHead>Slot</TableHead>
               <TableHead>Customer</TableHead>
               <TableHead>Repair</TableHead>
-              <TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {upcomingRepairs.length === 0 ? (
-              <TableEmpty colSpan={4}>
-                No repairs booked. Bookings from your store show up here.
+              <TableEmpty
+                colSpan={3}
+                action={
+                  <Button asChild size="sm">
+                    <Link href="/repairs">Set repair prices</Link>
+                  </Button>
+                }
+              >
+                No repairs booked. Set repair prices so customers can book from your store.
               </TableEmpty>
             ) : (
               upcomingRepairs.map((ticket) => (
@@ -133,9 +131,6 @@ export default async function DashboardPage() {
                   <TableCell>
                     {ticket.brand} {ticket.modelName}, {ticket.repairType}
                   </TableCell>
-                  <TableCell>
-                    <StatusBadge status={ticket.status} />
-                  </TableCell>
                 </TableRow>
               ))
             )}
@@ -144,38 +139,41 @@ export default async function DashboardPage() {
       </Card>
 
       <Card
-        title="Buybacks awaiting drop-in"
+        title="Buybacks to receive"
         actions={
           <Button asChild variant="ghost" size="sm">
             <Link href="/buybacks">View all</Link>
           </Button>
         }
       >
-        <Table caption="Buybacks awaiting drop-in">
+        <Table caption="Buybacks to receive">
           <TableHeader>
             <TableRow>
               <TableHead>Customer</TableHead>
               <TableHead>Device</TableHead>
               <TableHead align="right">Offer</TableHead>
-              <TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {pendingBuybacks.length === 0 ? (
-              <TableEmpty colSpan={4}>
-                No buybacks waiting. Accepted quotes show up here until you receive the device.
+              <TableEmpty
+                colSpan={3}
+                action={
+                  <Button asChild size="sm">
+                    <Link href="/buybacks">Set buyback prices</Link>
+                  </Button>
+                }
+              >
+                No buybacks waiting. Set buyback prices so customers can sell you their devices.
               </TableEmpty>
             ) : (
-              pendingBuybacks.slice(0, SHOWN_BUYBACKS).map((quote) => (
+              pendingBuybacks.map((quote) => (
                 <TableRow key={quote.id}>
                   <TableCell>{quote.customer?.name ?? "Unknown"}</TableCell>
                   <TableCell>
                     {quote.brand} {quote.deviceName}, {quote.storage}
                   </TableCell>
                   <TableCell align="right">{formatCents(quote.offer)}</TableCell>
-                  <TableCell>
-                    <StatusBadge status={quote.status} />
-                  </TableCell>
                 </TableRow>
               ))
             )}
