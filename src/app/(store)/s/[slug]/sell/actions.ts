@@ -13,6 +13,8 @@ export type SellFormState = {
   status: "idle" | "error";
   message?: string;
   fieldErrors?: Record<string, string>;
+  /** Counts submits, so the form can announce a repeated identical error. */
+  attempt?: number;
 };
 
 const TRY_AGAIN = "Something went wrong. Try again.";

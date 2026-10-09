@@ -17,9 +17,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 type Deps = { now?: Date; mailer?: Mailer };
 
-// Calculates the offer for a phone and stores the quote. Invalid input, or a
-// model and storage the shop does not buy, is not_offered; malformed input
-// is invalid.
+// Calculates the offer for a phone and stores the quote. A model and storage
+// the shop does not buy is not_offered; malformed input is invalid.
 export async function createQuote(
   shopId: string,
   input: { deviceModelId: string; storage: string; answers: Record<string, boolean> },

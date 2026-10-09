@@ -17,7 +17,13 @@ const FIELDS = [
 // Name, phone and email. Handover is fixed to dropping in to the shop. Only
 // the quote id is sent; the price comes from the server.
 export function AcceptForm({ slug, quoteId }: { slug: string; quoteId: string }) {
-  const [state, action, pending] = useActionState(acceptOffer, IDLE);
+  const [state, action, pending] = useActionState(
+    async (previous: SellFormState, form: FormData): Promise<SellFormState> => ({
+      ...(await acceptOffer(previous, form)),
+      attempt: (previous.attempt ?? 0) + 1,
+    }),
+    IDLE,
+  );
   const errors = state.fieldErrors ?? {};
   // Controlled, so a rejected submit does not wipe what was typed.
   const [values, setValues] = useState<Record<string, string>>({ name: "", phone: "", email: "" });
@@ -28,7 +34,7 @@ export function AcceptForm({ slug, quoteId }: { slug: string; quoteId: string })
       <input type="hidden" name="quoteId" value={quoteId} />
       <HoneypotField />
 
-      <ErrorSummary message={state.message} errors={Object.values(errors)} />
+      <ErrorSummary message={state.message} errors={Object.values(errors)} attempt={state.attempt} />
 
       {FIELDS.map((field) => (
         <div key={field.name} className="flex flex-col gap-1.5">

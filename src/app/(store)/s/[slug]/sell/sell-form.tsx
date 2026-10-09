@@ -34,7 +34,13 @@ function useKeepSelectValue(value: string, state: SellFormState) {
 // Brand, model and storage from what the shop buys, then three yes/no
 // condition questions. The offer itself is calculated on the server.
 export function SellForm({ slug, brands }: { slug: string; brands: OfferedBrand[] }) {
-  const [state, action, pending] = useActionState(getOffer, IDLE);
+  const [state, action, pending] = useActionState(
+    async (previous: SellFormState, form: FormData): Promise<SellFormState> => ({
+      ...(await getOffer(previous, form)),
+      attempt: (previous.attempt ?? 0) + 1,
+    }),
+    IDLE,
+  );
   const [brandName, setBrandName] = useState("");
   const [modelId, setModelId] = useState("");
   const [storage, setStorage] = useState("");
@@ -60,7 +66,7 @@ export function SellForm({ slug, brands }: { slug: string; brands: OfferedBrand[
       <input type="hidden" name="slug" value={slug} />
       <HoneypotField />
 
-      <ErrorSummary message={state.message} errors={Object.values(errors)} />
+      <ErrorSummary message={state.message} errors={Object.values(errors)} attempt={state.attempt} />
 
       <div className="flex flex-col gap-1.5">
         <label htmlFor="sell-brand" className="font-semibold">

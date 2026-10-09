@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AcceptForm } from "./accept-form";
@@ -41,5 +41,14 @@ describe("AcceptForm after a rejected submit", () => {
     expect(alert.textContent).toContain("Enter an email like you@example.com.");
     expect(screen.getByLabelText("Email").getAttribute("aria-invalid")).toBe("true");
     expect(screen.getByLabelText("Your name").getAttribute("aria-invalid")).toBeNull();
+  });
+
+  it("announces an identical error again on a second submit", async () => {
+    await submitWithBadEmail();
+    const first = await screen.findByRole("alert");
+    await userEvent.click(screen.getByRole("button", { name: "Accept offer" }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).not.toBe(first));
+    expect(screen.getByRole("alert").textContent).toBe(first.textContent);
   });
 });
